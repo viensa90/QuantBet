@@ -1,0 +1,39 @@
+# QuantBet Configuration
+# Principio: Ningún parámetro crítico va en el código.
+
+# --- Parámetros del Motor de Arbitraje (QB-004) ---
+arbitrage:
+  # Si el ROI es menor a este valor, se descarta la oportunidad.
+  min_roi_percent: 1.5
+  
+  # Overround máximo permitido para considerar que hay arbitraje.
+  # (1.0 es arbitraje perfecto, 0.99 es ganancia asegurada)
+  max_overround: 0.999
+
+# --- Parámetros del Opportunity Scorer (QB-004) ---
+scorer:
+  # Pesos para la fórmula del Opportunity Score (deben sumar 100)
+  weights:
+    roi: 50
+    time: 30
+    liquidity: 20
+  
+  # Time Score: tiempo máximo (en segundos) de antigüedad de un snapshot
+  # para obtener la máxima puntuación en frescura.
+  max_freshness_age_seconds: 10
+  
+  # Time Score: minutos antes del evento en que empieza a decaer la puntuación.
+  time_decay_start_minutes: 10
+
+# --- Parámetros de Gestión de Banca (QB-004) ---
+bankroll:
+  # Fracción máxima del capital disponible a arriesgar en una sola operación.
+  max_risk_per_opportunity: 0.05  # 5%
+  
+  # Moneda base para los reportes.
+  base_currency: "PYG"
+
+# --- Persistencia (MVP) ---
+database:
+  # Nombre del archivo SQLite local.
+  file_name: "quantbet.db"

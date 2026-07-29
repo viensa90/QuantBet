@@ -1,0 +1,13 @@
+# QuantBet MVP Dependencies
+# Archivo generado el 28/07/2026
+
+# Manipulación de datos y lectura de CSV
+pandas>=2.0.0
+
+# Configuración del sistema (archivo config.yaml)
+PyYAML>=6.0
+
+# Pruebas unitarias
+pytest>=7.0
+
+# (Futuro: playwright, streamlit, numpy, etc. - se añadirán en Fase 2)

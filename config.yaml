@@ -1,39 +1,34 @@
 # QuantBet Configuration
-# Principio: Ningún parámetro crítico va en el código.
+version: "0.1.0"
 
-# --- Parámetros del Motor de Arbitraje (QB-004) ---
-arbitrage:
-  # Si el ROI es menor a este valor, se descarta la oportunidad.
-  min_roi_percent: 1.5
-  
-  # Overround máximo permitido para considerar que hay arbitraje.
-  # (1.0 es arbitraje perfecto, 0.99 es ganancia asegurada)
-  max_overround: 0.999
-
-# --- Parámetros del Opportunity Scorer (QB-004) ---
-scorer:
-  # Pesos para la fórmula del Opportunity Score (deben sumar 100)
-  weights:
-    roi: 50
-    time: 30
-    liquidity: 20
-  
-  # Time Score: tiempo máximo (en segundos) de antigüedad de un snapshot
-  # para obtener la máxima puntuación en frescura.
-  max_freshness_age_seconds: 10
-  
-  # Time Score: minutos antes del evento en que empieza a decaer la puntuación.
-  time_decay_start_minutes: 10
-
-# --- Parámetros de Gestión de Banca (QB-004) ---
-bankroll:
-  # Fracción máxima del capital disponible a arriesgar en una sola operación.
-  max_risk_per_opportunity: 0.05  # 5%
-  
-  # Moneda base para los reportes.
-  base_currency: "PYG"
-
-# --- Persistencia (MVP) ---
+# Database
 database:
-  # Nombre del archivo SQLite local.
-  file_name: "quantbet.db"
+  path: "quantbet.db"
+
+# Decision
+decision:
+  threshold: 60.0  # Score mínimo para EJECUTAR (antes hardcodeado)
+
+# Scoring
+scoring:
+  roi_weight: 0.4
+  liquidity_weight: 0.3
+  confidence_weight: 0.3
+  min_roi: 0.0
+  max_roi: 10.0
+
+# Bankroll
+bankroll:
+  total: 1000.0        # Bankroll total en unidades monetarias
+  max_exposure: 0.10   # Exposición máxima por apuesta (10%)
+
+# Providers
+providers:
+  csv:
+    path: "data/sample_events.csv"
+
+# Logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "quantbet.log"

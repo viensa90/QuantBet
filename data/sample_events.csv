@@ -1,0 +1,22 @@
+snapshot_id,event_id,event_name,market_id,market_type,outcome_id,outcome_label,bookmaker_id,bookmaker_name,odds,timestamp
+SNAP-001,EVT-001,Barcelona vs Real Madrid,MKT-001,1X2,OUT-001,1 (Local),BK-001,BetAnalyst,2.10,2026-07-29T10:00:00
+SNAP-002,EVT-001,Barcelona vs Real Madrid,MKT-001,1X2,OUT-002,X (Empate),BK-001,BetAnalyst,3.50,2026-07-29T10:00:00
+SNAP-003,EVT-001,Barcelona vs Real Madrid,MKT-001,1X2,OUT-003,2 (Visitante),BK-001,BetAnalyst,3.20,2026-07-29T10:00:00
+SNAP-004,EVT-001,Barcelona vs Real Madrid,MKT-001,1X2,OUT-001,1 (Local),BK-002,OddMaster,2.05,2026-07-29T10:01:00
+SNAP-005,EVT-001,Barcelona vs Real Madrid,MKT-001,1X2,OUT-002,X (Empate),BK-002,OddMaster,3.45,2026-07-29T10:01:00
+SNAP-006,EVT-001,Barcelona vs Real Madrid,MKT-001,1X2,OUT-003,2 (Visitante),BK-002,OddMaster,3.15,2026-07-29T10:01:00
+SNAP-007,EVT-001,Barcelona vs Real Madrid,MKT-001,1X2,OUT-001,1 (Local),BK-003,QuantumBet,2.15,2026-07-29T10:02:00
+SNAP-008,EVT-001,Barcelona vs Real Madrid,MKT-001,1X2,OUT-002,X (Empate),BK-003,QuantumBet,3.40,2026-07-29T10:02:00
+SNAP-009,EVT-001,Barcelona vs Real Madrid,MKT-001,1X2,OUT-003,2 (Visitante),BK-003,QuantumBet,3.25,2026-07-29T10:02:00
+SNAP-010,EVT-002,Manchester City vs Liverpool,MKT-002,1X2,OUT-004,1 (Local),BK-001,BetAnalyst,2.50,2026-07-29T10:00:00
+SNAP-011,EVT-002,Manchester City vs Liverpool,MKT-002,1X2,OUT-005,X (Empate),BK-001,BetAnalyst,3.30,2026-07-29T10:00:00
+SNAP-012,EVT-002,Manchester City vs Liverpool,MKT-002,1X2,OUT-006,2 (Visitante),BK-001,BetAnalyst,2.80,2026-07-29T10:00:00
+SNAP-013,EVT-002,Manchester City vs Liverpool,MKT-002,1X2,OUT-004,1 (Local),BK-002,OddMaster,2.40,2026-07-29T10:01:00
+SNAP-014,EVT-002,Manchester City vs Liverpool,MKT-002,1X2,OUT-005,X (Empate),BK-002,OddMaster,3.25,2026-07-29T10:01:00
+SNAP-015,EVT-002,Manchester City vs Liverpool,MKT-002,1X2,OUT-006,2 (Visitante),BK-002,OddMaster,2.85,2026-07-29T10:01:00
+SNAP-016,EVT-002,Manchester City vs Liverpool,MKT-002,1X2,OUT-004,1 (Local),BK-003,QuantumBet,2.55,2026-07-29T10:02:00
+SNAP-017,EVT-002,Manchester City vs Liverpool,MKT-002,1X2,OUT-005,X (Empate),BK-003,QuantumBet,3.35,2026-07-29T10:02:00
+SNAP-018,EVT-002,Manchester City vs Liverpool,MKT-002,1X2,OUT-006,2 (Visitante),BK-003,QuantumBet,2.75,2026-07-29T10:02:00
+SNAP-019,EVT-003,Arbitraje Perfecto Garantizado,MKT-003,1X2,OUT-007,1 (Local),BK-001,BetAnalyst,2.20,2026-07-29T10:00:00
+SNAP-020,EVT-003,Arbitraje Perfecto Garantizado,MKT-003,1X2,OUT-008,X (Empate),BK-002,OddMaster,4.50,2026-07-29T10:01:00
+SNAP-021,EVT-003,Arbitraje Perfecto Garantizado,MKT-003,1X2,OUT-009,2 (Visitante),BK-003,QuantumBet,3.50,2026-07-29T10:02:00

@@ -1,34 +1,26 @@
-# QuantBet Configuration
-version: "0.1.0"
+# QuantBet - Configuración Centralizada
 
-# Database
-database:
-  path: "quantbet.db"
-
-# Decision
 decision:
-  threshold: 60.0  # Score mínimo para EJECUTAR (antes hardcodeado)
+  threshold: 60              # Score mínimo para EJECUTAR
 
-# Scoring
-scoring:
-  roi_weight: 0.4
-  liquidity_weight: 0.3
-  confidence_weight: 0.3
-  min_roi: 0.0
-  max_roi: 10.0
-
-# Bankroll
 bankroll:
-  total: 1000.0        # Bankroll total en unidades monetarias
-  max_exposure: 0.10   # Exposición máxima por apuesta (10%)
+  initial_funds: 1000.0      # Fondos iniciales (unidades)
+  stake_percentage: 0.10     # 10% del bankroll por apuesta
 
-# Providers
-providers:
+logging:
+  level: INFO                # DEBUG, INFO, WARNING, ERROR
+  file: "logs/quantbet.log"  # Ruta del archivo de log
+  console: true              # Mostrar en consola
+
+connectors:
   csv:
     path: "data/sample_events.csv"
-
-# Logging
-logging:
-  level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  file: "quantbet.log"
+  playwright:
+    sites:
+      - name: "example_site"
+        url: "https://example-betting-site.com/odds"
+        row_selector: "tr.match-row"
+        event_selector: "td.event-name"
+        odds_selector: "td.odd-value"
+        market: "1X2"
+        outcomes: ["1", "X", "2"]

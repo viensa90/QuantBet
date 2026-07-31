@@ -55,6 +55,40 @@ markets:
   asian_handicap:
     default_handicap: 0.0
 
+# Modelo de probabilidades
+probability_model:
+  type: "historical"  # opciones: "historical", "elo"
+  # Datos históricos (opcional)
+  historical_data:
+    teams:
+      Real Madrid:
+        home_win_rate: 0.70
+        draw_rate: 0.20
+        away_win_rate: 0.10
+        goals_scored_avg: 2.10
+        goals_conceded_avg: 0.90
+        strength: 0.85
+      Barcelona:
+        home_win_rate: 0.65
+        draw_rate: 0.25
+        away_win_rate: 0.10
+        goals_scored_avg: 2.00
+        goals_conceded_avg: 1.00
+        strength: 0.80
+      Atletico Madrid:
+        home_win_rate: 0.60
+        draw_rate: 0.30
+        away_win_rate: 0.10
+        goals_scored_avg: 1.50
+        goals_conceded_avg: 0.70
+        strength: 0.75
+  # Ratings Elo (para modelo Elo)
+  elo_ratings:
+    Real Madrid: 2100
+    Barcelona: 2050
+    Atletico Madrid: 1950
+    Sevilla: 1850
+
 # Decisiones
 decision:
   min_arbitrage_percent: 2.0  # % mínimo para considerar surebet
@@ -73,13 +107,3 @@ logging:
   level: "INFO"  # DEBUG, INFO, WARNING, ERROR
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   file: "quantbet.log"
-
-# Probabilidades justas (para value betting)
-fair_probabilities:
-  default:
-    Local: 0.40
-    Empate: 0.30
-    Visitante: 0.30
-  over_under:
-    Over: 0.50
-    Under: 0.50

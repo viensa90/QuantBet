@@ -1,62 +1,106 @@
 """
-Detector de Value Bets.
-Identifica apuestas con valor esperado positivo comparando cuotas implícitas con probabilidades justas estimadas.
+Detector de Value Bets con soporte para múltiples modelos de probabilidad.
 """
 
-from typing import List, Dict
-from src.domain.entities import Snapshot
+from typing import List, Dict, Optional, Any
+from decimal import Decimal
+
+from src.domain.entities import Snapshot, ValueBet, MarketType
+from src.core.probability_model import ProbabilityModel, HistoricalModel, ProbabilityModelFactory
+from src.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ValueBetDetector:
-    """Detecta value bets basado en un margen mínimo de valor."""
-
-    def __init__(self, margin: float = 0.05):
+    """Detector de value bets usando modelos de probabilidad."""
+    
+    def __init__(self, model_config: Optional[Dict] = None):
         """
+        Inicializa el detector.
+        
         Args:
-            margin: Margen de valor mínimo (ej. 0.05 = 5% de valor)
+            model_config: Configuración del modelo de probabilidad
         """
-        self.margin = margin
-
-    def detect(self, event_id: str, snapshots: List[Snapshot],
-               fair_probabilities: Dict[str, float]) -> List[Dict]:
+        self.model_config = model_config or {}
+        model_type = self.model_config.get('type', 'historical')
+        self.model = ProbabilityModelFactory.create(model_type, self.model_config)
+        logger.info("ValueBetDetector inicializado con modelo %s", model_type)
+    
+    def detect_value_bets(self, snapshots: List[Snapshot], 
+                          min_value_threshold: float = 0.05) -> List[ValueBet]:
         """
-        Encuentra value bets en un evento.
-
+        Detecta value bets en los snapshots.
+        
         Args:
-            event_id: ID del evento
-            snapshots: Lista de snapshots de cuotas
-            fair_probabilities: Probabilidades justas estimadas por selección
-
+            snapshots: Lista de snapshots a procesar
+            min_value_threshold: Umbral mínimo de valor (0.05 = 5%)
+            
         Returns:
-            Lista de value bets encontradas
+            Lista de ValueBet detectados
         """
         value_bets = []
-        selections = self._group_by_selection(snapshots)
-
-        for selection, fair_prob in fair_probabilities.items():
-            if selection not in selections:
+        
+        for snapshot in snapshots:
+            # Calcular probabilidades justas
+            fair_probs = self.model.calculate_probabilities(
+                snapshot.event_id,
+                snapshot.market_type,
+                snapshot.metadata
+            )
+            
+            if not fair_probs:
                 continue
-
-            best_snapshot = max(selections[selection], key=lambda s: s.odds)
-            implied_prob = 1.0 / best_snapshot.odds
-
-            if fair_prob > implied_prob + self.margin:
-                value = (fair_prob - implied_prob) / implied_prob * 100
-                value_bets.append({
-                    "event_id": event_id,
-                    "selection": selection,
-                    "bookmaker": best_snapshot.bookmaker,
-                    "odds": best_snapshot.odds,
-                    "fair_probability": fair_prob,
-                    "implied_probability": implied_prob,
-                    "value_percentage": round(value, 2),
-                    "snapshot_id": best_snapshot.snapshot_id
-                })
-
+            
+            # Calcular valor para cada resultado
+            for outcome, odds in snapshot.odds.items():
+                if outcome not in fair_probs:
+                    continue
+                
+                fair_prob = fair_probs[outcome]
+                actual_prob = float(1 / odds) if odds > 0 else 0
+                
+                # Calcular valor
+                value_percent = (actual_prob - fair_prob) / fair_prob if fair_prob > 0 else 0
+                
+                if value_percent >= min_value_threshold:
+                    value_bet = ValueBet(
+                        event_id=snapshot.event_id,
+                        event_name=snapshot.event_name,
+                        source=snapshot.source,
+                        market_type=snapshot.market_type,
+                        outcome=outcome,
+                        fair_probability=fair_prob,
+                        actual_odds=odds,
+                        value_percent=value_percent,
+                        timestamp=snapshot.timestamp,
+                        metadata=snapshot.metadata
+                    )
+                    value_bets.append(value_bet)
+        
+        # Ordenar por valor (mayor primero)
+        value_bets.sort(key=lambda x: x.value_percent, reverse=True)
+        
+        if value_bets:
+            logger.info("Detectados %d value bets", len(value_bets))
+            top = value_bets[0]
+            logger.debug("Top value bet: %s - %s con valor %.2f%%", 
+                        top.event_id, top.outcome, top.value_percent * 100)
+        
         return value_bets
-
-    def _group_by_selection(self, snapshots: List[Snapshot]) -> Dict[str, List[Snapshot]]:
-        groups = {}
-        for s in snapshots:
-            groups.setdefault(s.selection, []).append(s)
-        return groups
+    
+    def get_fair_probabilities(self, snapshot: Snapshot) -> Dict[str, float]:
+        """
+        Obtiene probabilidades justas para un snapshot.
+        
+        Args:
+            snapshot: Snapshot a analizar
+            
+        Returns:
+            Diccionario {resultado: probabilidad}
+        """
+        return self.model.calculate_probabilities(
+            snapshot.event_id,
+            snapshot.market_type,
+            snapshot.metadata
+        )

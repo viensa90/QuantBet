@@ -1,26 +1,69 @@
-# QuantBet - Configuración Centralizada
+# Configuración general de QuantBet
+version: "0.2.0"
 
+# Configuración del conector
+connector:
+  type: "csv"  # opciones: "csv", "web"
+  
+# Configuración CSV (para pruebas)
+csv:
+  file_path: "data/sample_events.csv"
+
+# Configuración Web Scraping
+web_scraping:
+  headless: true
+  timeout: 30000  # milisegundos
+  bookmakers:
+    bet365:
+      url: "https://www.bet365.es/"
+      selectors:
+        "Local": ".odds-local-class"  # Selector real a configurar
+        "Empate": ".odds-draw-class"
+        "Visitante": ".odds-away-class"
+      events:
+        - id: "EVT-001"
+          name: "Real Madrid vs Barcelona"
+          url: "https://www.bet365.es/event/12345"
+          market_type: "1X2"
+        - id: "EVT-002"
+          name: "Bayern vs Dortmund"
+          url: "https://www.bet365.es/event/67890"
+          market_type: "1X2"
+    
+    william_hill:
+      url: "https://www.williamhill.es/"
+      selectors:
+        "Local": ".wh-odds-home"
+        "Empate": ".wh-odds-draw"
+        "Visitante": ".wh-odds-away"
+      events:
+        - id: "EVT-001"
+          name: "Real Madrid vs Barcelona"
+          url: "https://www.williamhill.es/event/12345"
+          market_type: "1X2"
+
+# Decisiones
 decision:
-  threshold: 60              # Score mínimo para EJECUTAR
+  min_arbitrage_percent: 2.0  # % mínimo para considerar surebet
+  min_value_threshold: 0.05   # 5% de valor mínimo
+  max_stake_percent: 0.10     # 10% del bankroll por apuesta
 
+# Bankroll
 bankroll:
-  initial_funds: 1000.0      # Fondos iniciales (unidades)
-  stake_percentage: 0.10     # 10% del bankroll por apuesta
+  initial: 1000.0
+  currency: "EUR"
+  max_single_bet: 100.0
+  min_single_bet: 10.0
 
+# Logging
 logging:
-  level: INFO                # DEBUG, INFO, WARNING, ERROR
-  file: "logs/quantbet.log"  # Ruta del archivo de log
-  console: true              # Mostrar en consola
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "quantbet.log"
 
-connectors:
-  csv:
-    path: "data/sample_events.csv"
-  playwright:
-    sites:
-      - name: "example_site"
-        url: "https://example-betting-site.com/odds"
-        row_selector: "tr.match-row"
-        event_selector: "td.event-name"
-        odds_selector: "td.odd-value"
-        market: "1X2"
-        outcomes: ["1", "X", "2"]
+# Probabilidades justas (para value betting)
+fair_probabilities:
+  default:
+    Local: 0.40
+    Empate: 0.30
+    Visitante: 0.30

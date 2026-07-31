@@ -1,0 +1,160 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: #0a0e17;
+    color: #e0e6ed;
+    padding: 20px;
+}
+
+header {
+    background: linear-gradient(135deg, #1a2332 0%, #0d1520 100%);
+    padding: 20px 30px;
+    border-radius: 12px;
+    border: 1px solid #2a3a4a;
+    margin-bottom: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #00d4ff;
+}
+
+.status-bar {
+    display: flex;
+    gap: 20px;
+    font-size: 14px;
+    color: #8899aa;
+}
+
+.status-bar span {
+    background: #1a2332;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid #2a3a4a;
+}
+
+#status {
+    color: #00ff88;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: #1a2332;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #2a3a4a;
+    text-align: center;
+}
+
+.stat-card h3 {
+    font-size: 14px;
+    color: #8899aa;
+    margin-bottom: 8px;
+    font-weight: 400;
+}
+
+.stat-card p {
+    font-size: 28px;
+    font-weight: 700;
+    color: #00d4ff;
+}
+
+section {
+    background: #1a2332;
+    border-radius: 12px;
+    border: 1px solid #2a3a4a;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+section h2 {
+    font-size: 18px;
+    margin-bottom: 16px;
+    color: #00d4ff;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+th {
+    text-align: left;
+    padding: 12px 15px;
+    background: #0d1520;
+    color: #8899aa;
+    font-weight: 500;
+    border-bottom: 2px solid #2a3a4a;
+}
+
+td {
+    padding: 10px 15px;
+    border-bottom: 1px solid #1e2a36;
+}
+
+tr:hover {
+    background: #0d1520;
+}
+
+.loading {
+    text-align: center;
+    color: #8899aa;
+    padding: 30px !important;
+}
+
+.accepted {
+    color: #00ff88;
+}
+
+.rejected {
+    color: #ff6b6b;
+}
+
+.odds-high {
+    color: #00d4ff;
+}
+
+.odds-medium {
+    color: #ffd93d;
+}
+
+.odds-low {
+    color: #ff6b6b;
+}
+
+@media (max-width: 768px) {
+    header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .status-bar {
+        flex-wrap: wrap;
+    }
+    
+    .stats {
+        grid-template-columns: 1fr 1fr;
+    }
+}

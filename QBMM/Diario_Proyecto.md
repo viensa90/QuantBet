@@ -16,10 +16,10 @@ Reglas implícitas (no necesito repetirlas):
 ## 📋 RESUMEN EJECUTIVO
 
 **Proyecto:** QuantBet - Sistema de Arbitraje Deportivo Automatizado  
-**Versión:** 0.1.0 (MVP + Mejoras)  
+**Versión:** 0.2.0 (MVP + Value Betting & Dutching)  
 **Repositorio:** https://github.com/viensa90/QuantBet  
-**Última sesión:** 9 - 29/07/2026  
-**Estado:** MVP completado + Deuda técnica prioritaria resuelta
+**Última sesión:** 10 - 30/07/2026  
+**Estado:** Estrategias adicionales implementadas
 
 ---
 
@@ -37,7 +37,7 @@ Reglas implícitas (no necesito repetirlas):
 QuantBet/
 ├── QBMM/ # Documentación de ingeniería
 ├── src/
-│ ├── init.py # v0.1.0
+│ ├── init.py # v0.2.0
 │ ├── config_loader.py # Singleton para config.yaml
 │ ├── logger.py # Logging estructurado
 │ ├── domain/
@@ -48,17 +48,21 @@ QuantBet/
 │ ├── core/
 │ │ ├── arbitrage.py # Motor de arbitraje
 │ │ ├── scorer.py # Puntuador 0-100
-│ │ └── bankroll.py # Validador de fondos
+│ │ ├── bankroll.py # Validador de fondos
+│ │ ├── value_betting.py # Detector de value bets
+│ │ └── dutching.py # Calculador de dutching
 │ └── connectors/
 │ ├── base.py # Interfaz IDataProvider
 │ └── csv_provider.py # Implementación CSV
 ├── tests/
 │ ├── test_arbitrage.py # 5 tests unitarios
 │ ├── test_integration.py # 7 tests integración
-│ └── test_bankroll.py # 7 tests bankroll
+│ ├── test_bankroll.py # 7 tests bankroll
+│ ├── test_value_betting.py # 3 tests value betting
+│ └── test_dutching.py # 4 tests dutching
 ├── data/
 │ └── sample_events.csv # 21 snapshots (3 eventos)
-├── main.py # CLI + Pipeline 7 pasos
+├── main.py # CLI + Pipeline multi-estrategia
 ├── config.yaml # Configuración centralizada
 ├── requirements.txt # pytest, pyyaml
 └── quantbet.db # SQLite (autogenerada)
@@ -67,30 +71,41 @@ QuantBet/
 
 ## 🔄 HISTORIAL DE SESIONES
 
+### Sesión 10 - 30/07/2026 - Value Betting y Dutching
+
+**Objetivo:** Implementar estrategias de Value Betting y Dutching (Prioridad Media).
+
+**Entregables:**
+- CREAR `src/core/value_betting.py` - ValueBetDetector
+- CREAR `src/core/dutching.py` - DutchingCalculator
+- CREAR `tests/test_value_betting.py` - 3 tests
+- CREAR `tests/test_dutching.py` - 4 tests
+- REEMPLAZAR `main.py` - Pipeline multi-estrategia con modos (`--mode arbitrage|value|dutching|all`)
+
+**Decisiones:**
+- ValueBetDetector usa probabilidades justas de ejemplo (pendiente integrar modelo real).
+- DutchingCalculator calcula stakes proporcionales para cobertura total.
+- Pipeline unificado: `run(mode=...)` selecciona la estrategia.
+- Probabilidades justas por defecto: `{"Local":0.40, "Empate":0.30, "Visitante":0.30}`.
+
+**Nuevos tests:** 7 (3 value + 4 dutching) → Total tests: 26  
+**Principios impactados:** #2 reforzado (motor no conoce fuente, aplica a value/dutching también).
+
+---
+
 ### Sesión 9 - 29/07/2026 - Deuda Técnica Prioritaria
 
 **Objetivo:** Resolver 3 items de deuda técnica del MVP.
 
 **Entregables:**
-- CREAR `src/config_loader.py` - Singleton ConfigLoader (notación punto)
-- CREAR `src/logger.py` - Logging estructurado (consola + archivo)
-- CREAR `src/core/bankroll.py` - BankrollManager (validación pre-ejecución)
-- CREAR `tests/test_bankroll.py` - 7 tests unitarios
+- CREAR `src/config_loader.py` - Singleton ConfigLoader
+- CREAR `src/logger.py` - Logging estructurado
+- CREAR `src/core/bankroll.py` - BankrollManager
+- CREAR `tests/test_bankroll.py` - 7 tests
 - REEMPLAZAR `config.yaml` - Agregar decision.threshold, bankroll, logging
 - REEMPLAZAR `main.py` - Integrar ConfigLoader, Bankroll, Logging
 
-**Decisiones:**
-- Umbral de decisión movido a `config.yaml` → Principio #5 completado ✅
-- BankrollManager valida fondos antes de EJECUTAR (stake = 10% del total)
-- Logging reemplaza todos los `print()` (niveles: INFO, WARNING, ERROR)
-- ConfigLoader usa patrón Singleton (misma instancia en todo el pipeline)
-
-**Deuda técnica resuelta:**
-- ✅ Umbral hardcodeado → `config.yaml` (Principio #5)
-- ✅ Sin validación bankroll → `BankrollManager` (QB-004)
-- ✅ Prints → Logging estructurado
-
-**Principios impactados:** #5 completado, #4 reforzado (decisiones ahora incluyen reason y stakes)
+**Principios impactados:** #5 completado, #4 reforzado.
 
 ---
 
@@ -99,112 +114,78 @@ QuantBet/
 **Objetivo:** Implementar Hito 4 - Pipeline completo con CLI.
 
 **Entregables:**
-- CREAR `src/__init__.py` - Identidad del paquete
-- CREAR `main.py` - Pipeline 7 pasos + CLI (argparse)
-- CREAR `tests/test_integration.py` - 6 tests integración
+- CREAR `src/__init__.py`
+- CREAR `main.py` - Pipeline 7 pasos + CLI
+- CREAR `tests/test_integration.py` - 7 tests integración
 
-**Pipeline:** 1. Obtener → 2. Persistir → 3. Agrupar → 4. Detectar → 5. Puntuar → 6. Decidir → 7. Reportar
+---
 
-**Umbral:** Score ≥ 60 → EJECUTAR, < 60 → SALTAR
+### Sesión 7 - 27/07/2026 - Conector Simulado
 
-**Comandos CLI:**
-```bash
-python main.py                    # Pipeline completo
-python main.py --event EVT-003    # Evento específico
-python main.py --list-events      # Listar eventos
-python main.py --csv datos.csv    # CSV personalizado
-Sesión 7 - 27/07/2026 - Conector Simulado
-Objetivo: Implementar Hito 3 - CSV Provider.
+**Objetivo:** Implementar Hito 3 - CSV Provider.
 
-Entregables:
+**Entregables:**
+- CREAR `src/connectors/base.py`, `csv_provider.py`
+- CREAR `data/sample_events.csv` (21 snapshots)
 
-CREAR src/connectors/base.py - Interfaz IDataProvider
+---
 
-CREAR src/connectors/csv_provider.py - CSVProvider
+### Sesión 6 - 26/07/2026 - Motor de Arbitraje y Scorer
 
-CREAR data/sample_events.csv - 21 snapshots de prueba
+**Objetivo:** Implementar Hito 2 - Core.
 
-Eventos: EVT-001, EVT-002, EVT-003 (EVT-003 con surebet garantizado 3.76%)
+**Entregables:**
+- CREAR `src/core/arbitrage.py`, `scorer.py`
+- CREAR `tests/test_arbitrage.py` (5 tests)
 
-Sesión 6 - 26/07/2026 - Motor de Arbitraje y Scorer
-Objetivo: Implementar Hito 2 - Core.
+---
 
-Entregables:
+### Sesión 5 - 25/07/2026 - Dominio y Persistencia
 
-CREAR src/core/arbitrage.py - ArbitrageEngine
+**Objetivo:** Implementar Hito 1 - Base de datos y entidades.
 
-CREAR src/core/scorer.py - OpportunityScorer
+**Entregables:**
+- CREAR `src/domain/entities.py`
+- CREAR `src/storage/database.py`, `repository.py`
 
-CREAR tests/test_arbitrage.py - 5 tests unitarios
+---
 
-Scoring: ROI (40%) + Liquidez (30%) + Confianza (30%)
+## 📊 MÉTRICAS ACTUALES
 
-Sesión 5 - 25/07/2026 - Dominio y Persistencia
-Objetivo: Implementar Hito 1 - Base de datos y entidades.
+- **Tests totales:** 26 (5 arbitraje + 7 integración + 7 bankroll + 3 value + 4 dutching)
+- **Cobertura principios:** 5/5 ✅
+- **Snapshots prueba:** 21 (3 eventos)
+- **Oportunidad garantizada:** EVT-003 (Surebet 3.76%)
+- **Deuda técnica:** 0 items críticos
 
-Entregables:
+---
 
-CREAR src/domain/entities.py - Snapshot, Opportunity, ScoredOpportunity
+## 🚀 PRÓXIMOS PASOS (Priorizados)
 
-CREAR src/storage/database.py - Singleton SQLite
-
-CREAR src/storage/repository.py - CRUD inmutable
-
-📊 MÉTRICAS ACTUALES
-Tests totales: 19 (5 arbitraje + 7 integración + 7 bankroll)
-
-Cobertura principios: 5/5 ✅
-
-Snapshots prueba: 21 (3 eventos)
-
-Oportunidad garantizada: EVT-003 (Surebet 3.76%)
-
-Deuda técnica: 0 items críticos
-
-🚀 PRÓXIMOS PASOS (Priorizados)
-Prioridad Alta:
+### Prioridad Alta (completada):
 1. ~~Mover umbral a config.yaml~~ ✅ (Sesión 9)
 2. ~~Validación de bankroll~~ ✅ (Sesión 9)
 3. ~~Logging estructurado~~ ✅ (Sesión 9)
 
-Prioridad Media:
-4. Conectores reales con Playwright (scraping web)
-5. Value Betting y Dutching (estrategias QB-004)
+### Prioridad Media (parcial):
+4. ~~Value Betting y Dutching~~ ✅ (Sesión 10)
+5. Conectores reales con Playwright (scraping web)
 6. Dashboard web para visualización
-7. Soporte multi-mercado (Over/Under, Asian Handicap)
+7. Soporte multi-mercado avanzado (Over/Under, Asian Handicap)
+8. Integración de modelo de probabilidades reales para value betting
 
-Prioridad Baja:
-8. Optimización de queries SQLite
-9. Tests de estrés (1000+ eventos)
-10. CI/CD con GitHub Actions
-
-📝 DIARIO - SESIÓN 10 (PRÓXIMA)
-Para iniciar Sesión 10, la IA debe:
-1. Leer repositorio completo
-2. Verificar estado actual vs este diario
-3. Confirmar tests pasando (19/19)
-4. Proponer siguiente item de Prioridad Media
-5. Ejecutar sin pedir confirmación para lecturas
+### Prioridad Baja:
+9. Optimización de queries SQLite
+10. Tests de estrés (1000+ eventos)
+11. CI/CD con GitHub Actions
 
 ---
 
-## 📊 RESUMEN FINAL SESIÓN 9
+## 📝 DIARIO - SESIÓN 11 (PRÓXIMA)
 
-### Archivos creados/reemplazados:
-1. ✅ CREAR `src/config_loader.py`
-2. ✅ CREAR `src/logger.py`
-3. ✅ CREAR `src/core/bankroll.py`
-4. ✅ CREAR `tests/test_bankroll.py`
-5. ✅ REEMPLAZAR `config.yaml`
-6. ✅ REEMPLAZAR `main.py`
-7. ✅ REEMPLAZAR `Diario_Proyecto.md`
-
-### Deuda técnica resuelta:
-- ✅ Principio #5 completado (umbral en config.yaml)
-- ✅ QB-004: Bankroll validado antes de ejecutar
-- ✅ Logging estructurado implementado
-
-### Total tests: 19 (todos deberían pasar)
-
-### Para la próxima sesión:
-La IA leerá este diario como primer mensaje y tendrá contexto completo para continuar con Prioridad Media (conectores reales, value betting, dashboard).
+**Para iniciar Sesión 11, la IA debe:**
+1. Leer repositorio completo
+2. Verificar estado actual vs este diario
+3. Confirmar tests pasando (26/26)
+4. Proponer siguiente ítem de Prioridad Media (probablemente scraping con Playwright o dashboard)
+5. Ejecutar sin pedir confirmación para lecturas

@@ -1,107 +1,107 @@
 """
-QuantBet - Motor de Puntuación (QB-004, 3.3)
-Calcula el Opportunity Score para una decisión detectada.
-Principio: Pondera múltiples factores (ROI, tiempo, liquidez) para priorizar oportunidades.
+Puntuador de oportunidades con soporte multi-mercado.
 """
-from datetime import datetime, timezone
-from typing import Optional
-import logging
 
-logger = logging.getLogger(__name__)
+from typing import List, Dict, Any
+from decimal import Decimal
 
-class OpportunityScorer:
-    """
-    Asigna una puntuación de 0 a 100 a una oportunidad de arbitraje.
-    Combina el ROI, la frescura de los datos, el tiempo hasta el evento y la liquidez.
-    """
+from src.domain.entities import Opportunity, ScoredOpportunity, MarketType
+from src.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+class Scorer:
+    """Puntuador de oportunidades 0-100."""
     
-    def __init__(self, weights: dict, max_freshness_age_seconds: int = 10, time_decay_start_minutes: int = 10):
-        """
-        Args:
-            weights: Diccionario con los pesos para cada factor.
-                     Ej: {'roi': 50, 'time': 30, 'liquidity': 20}
-            max_freshness_age_seconds: Edad máxima del snapshot para máxima puntuación de frescura.
-            time_decay_start_minutes: Minutos antes del evento en que empieza a decaer la puntuación.
-        """
-        self.weights = weights
-        self.max_freshness_age_seconds = max_freshness_age_seconds
-        self.time_decay_start_minutes = time_decay_start_minutes
-        
-        # Normalizar pesos
-        total_weight = sum(weights.values())
-        if total_weight != 100:
-            logger.warning(f"Pesos suman {total_weight}. Se normalizarán a 100.")
-            self.weights = {k: (v / total_weight) * 100 for k, v in weights.items()}
+    def __init__(self):
+        self.weights = {
+            'arbitrage_percent': 0.50,
+            'liquidity': 0.25,
+            'market_complexity': 0.25
+        }
+        logger.info("Scorer inicializado con pesos: %s", self.weights)
     
-    def calculate(
-        self,
-        roi_percent: float,
-        snapshot_ages_seconds: list,
-        event_start_time_utc: Optional[datetime] = None,
-        max_stake_allowed: float = 0.0,
-        confidence_factor: float = 1.0
-    ) -> float:
+    def score_opportunity(self, opportunity: Opportunity) -> ScoredOpportunity:
         """
-        Calcula el Opportunity Score.
+        Calcula puntuación para una oportunidad.
         
         Args:
-            roi_percent: ROI de la oportunidad (ej. 5.2 para 5.2%).
-            snapshot_ages_seconds: Lista con la antigüedad de cada snapshot en segundos.
-            event_start_time_utc: Hora de inicio del evento (None si no se conoce).
-            max_stake_allowed: Stake máximo permitido por el bankroll.
-            confidence_factor: Factor de confianza en los datos (0.0-1.0).
-        
-        Returns:
-            Puntuación de 0 a 100.
-        """
-        scores = {}
-        
-        # 1. ROI Score (0-100)
-        if roi_percent <= 0:
-            return 0.0
-        # Un ROI del 8% o más es "perfecto" para el score de ROI
-        scores['roi'] = min(100.0, (roi_percent / 8.0) * 100.0)
-        
-        # 2. Time Score (0-100) - Frescura de datos
-        if snapshot_ages_seconds:
-            avg_age = sum(snapshot_ages_seconds) / len(snapshot_ages_seconds)
-            if avg_age <= self.max_freshness_age_seconds:
-                scores['time'] = 100.0
-            else:
-                # Decaimiento exponencial después del umbral
-                decay_factor = (avg_age - self.max_freshness_age_seconds) / 60.0  # en minutos
-                scores['time'] = max(0.0, 100.0 * (0.9 ** decay_factor))
-        else:
-            scores['time'] = 50.0  # Sin información, neutro
-        
-        # 3. Event Time Decay (si conocemos la hora del evento)
-        if event_start_time_utc:
-            now_utc = datetime.now(timezone.utc)
-            minutes_to_event = (event_start_time_utc - now_utc).total_seconds() / 60.0
+            opportunity: Oportunidad a puntuar
             
-            if minutes_to_event <= 0:
-                # Evento ya empezó o acaba de empezar
-                scores['time'] = min(scores['time'], 10.0)  # Penalización fuerte
-            elif minutes_to_event < self.time_decay_start_minutes:
-                # Decaimiento lineal en los últimos minutos
-                decay = minutes_to_event / self.time_decay_start_minutes
-                scores['time'] = min(scores['time'], decay * 100.0)
+        Returns:
+            ScoredOpportunity con puntuación y razonamiento
+        """
+        reasoning = []
+        score = 0.0
         
-        # 4. Liquidity Score (0-100)
-        # Asumimos que un stake de 1,000,000 PYG es "excelente"
-        ideal_stake = 1_000_000.0
-        if max_stake_allowed > 0:
-            scores['liquidity'] = min(100.0, (max_stake_allowed / ideal_stake) * 100.0)
+        # 1. Factor: % de arbitraje
+        arb_score = min(opportunity.arbitrage_percent / 10.0, 1.0) * 100
+        weighted_arb = arb_score * self.weights['arbitrage_percent']
+        score += weighted_arb
+        reasoning.append(f"Arbitraje {opportunity.arbitrage_percent:.2f}% -> {arb_score:.1f}pts (peso {self.weights['arbitrage_percent']*100:.0f}%)")
+        
+        # 2. Factor: liquidez (simulado por ahora)
+        liquidity_score = 50.0  # Default
+        weighted_liq = liquidity_score * self.weights['liquidity']
+        score += weighted_liq
+        reasoning.append(f"Liquidez simulada -> {liquidity_score:.1f}pts (peso {self.weights['liquidity']*100:.0f}%)")
+        
+        # 3. Factor: complejidad del mercado
+        complexity_scores = {
+            MarketType.MERCADO_1X2: 80.0,      # Fácil
+            MarketType.DOUBLE_CHANCE: 70.0,    # Medio-fácil
+            MarketType.OVER_UNDER: 60.0,       # Medio
+            MarketType.ASIAN_HANDICAP: 40.0,   # Complejo
+        }
+        complexity_score = complexity_scores.get(opportunity.market_type, 50.0)
+        weighted_complexity = complexity_score * self.weights['market_complexity']
+        score += weighted_complexity
+        reasoning.append(f"Complejidad {opportunity.market_type.value} -> {complexity_score:.1f}pts (peso {self.weights['market_complexity']*100:.0f}%)")
+        
+        # Normalizar a 0-100
+        final_score = min(score, 100.0)
+        
+        # Determinar nivel de riesgo
+        if final_score >= 70:
+            risk_level = "bajo"
+        elif final_score >= 50:
+            risk_level = "medio"
         else:
-            scores['liquidity'] = 0.0
+            risk_level = "alto"
         
-        # 5. Confidence Score (0-100) - basado en la fuente de datos
-        scores['confidence'] = confidence_factor * 100.0
+        return ScoredOpportunity(
+            opportunity=opportunity,
+            score=final_score,
+            risk_level=risk_level,
+            reasoning=reasoning
+        )
+    
+    def score_opportunities(self, opportunities: List[Opportunity], 
+                           threshold: float = 2.0) -> List[ScoredOpportunity]:
+        """
+        Puntúa múltiples oportunidades y filtra por umbral.
         
-        # Calcular puntuación ponderada final
-        final_score = 0.0
-        for factor in self.weights:
-            if factor in scores:
-                final_score += scores[factor] * (self.weights[factor] / 100.0)
+        Args:
+            opportunities: Lista de oportunidades
+            threshold: Umbral mínimo de % de arbitraje
+            
+        Returns:
+            Lista de oportunidades puntuadas
+        """
+        scored = []
         
-        return round(min(100.0, max(0.0, final_score)), 2)
+        for opp in opportunities:
+            # Filtrar por umbral
+            if opp.arbitrage_percent >= threshold:
+                scored.append(self.score_opportunity(opp))
+            else:
+                logger.debug("Oportunidad descartada por umbral: %.2f%% < %.2f%%", 
+                           opp.arbitrage_percent, threshold)
+        
+        # Ordenar por puntuación
+        scored.sort(key=lambda x: x.score, reverse=True)
+        
+        logger.info("Oportunidades puntuadas: %d (de %d totales)", 
+                   len(scored), len(opportunities))
+        return scored

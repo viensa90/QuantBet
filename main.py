@@ -23,11 +23,43 @@ from src.domain.entities import MarketType
 logger = get_logger(__name__)
 
 
+def parse_markets(markets_str: Optional[str]) -> list:
+    """
+    Parsea lista de mercados desde argumento CLI.
+    
+    Args:
+        markets_str: String con mercados separados por coma
+        
+    Returns:
+        Lista de MarketType
+    """
+    if not markets_str:
+        return None
+    
+    market_map = {
+        "1X2": MarketType.MERCADO_1X2,
+        "OVER_UNDER": MarketType.OVER_UNDER,
+        "ASIAN_HANDICAP": MarketType.ASIAN_HANDICAP,
+        "DOUBLE_CHANCE": MarketType.DOUBLE_CHANCE,
+    }
+    
+    markets = []
+    for m in markets_str.split(','):
+        m = m.strip().upper()
+        if m in market_map:
+            markets.append(market_map[m])
+        else:
+            logger.warning("Mercado no reconocido: %s", m)
+    
+    return markets if markets else None
+
+
 def run_arbitrage(
     connector, 
     repository: Repository,
     bankroll: BankrollManager,
-    config: dict
+    config: dict,
+    enabled_markets: Optional[list] = None
 ) -> None:
     """Ejecuta pipeline de arbitraje."""
     logger.info("=== EJECUTANDO ARBITRAJE ===")
@@ -46,7 +78,7 @@ def run_arbitrage(
     logger.info("Snapshots guardados: %d", len(snapshots))
     
     # 3. Detectar oportunidades
-    engine = ArbitrageEngine()
+    engine = ArbitrageEngine(enabled_markets=enabled_markets)
     opportunities = engine.detect_opportunities(snapshots)
     
     if not opportunities:
@@ -66,8 +98,10 @@ def run_arbitrage(
     # 5. Validar bankroll
     for op in scored_ops:
         if bankroll.can_bet(op):
-            logger.info("OPORTUNIDAD VALIDADA: %s | Score: %.2f%% | Stake sugerido: %.2f %s",
-                       op.opportunity.event_id, op.score, 
+            logger.info("OPORTUNIDAD VALIDADA: %s | Mercado: %s | Score: %.2f%% | Stake sugerido: %.2f %s",
+                       op.opportunity.event_id,
+                       op.opportunity.market_type.value,
+                       op.score, 
                        bankroll.calculate_stake(op) or 0,
                        config.get('bankroll', {}).get('currency', 'EUR'))
             
@@ -79,7 +113,11 @@ def run_arbitrage(
                 True,
                 op.score,
                 bankroll.calculate_stake(op) or 0,
-                {"arbitrage_percent": op.opportunity.arbitrage_percent}
+                {
+                    "arbitrage_percent": op.opportunity.arbitrage_percent,
+                    "market_type": op.opportunity.market_type.value,
+                    "metadata": op.opportunity.metadata
+                }
             )
         else:
             logger.debug("Oportunidad rechazada por bankroll: %s", op.opportunity.event_id)
@@ -112,7 +150,7 @@ def run_value_betting(
     
     for vb in value_bets:
         logger.info("VALUE BET: %s | Mercado: %s | Valor: %.2f%%",
-                   vb.event_id, vb.market_type, vb.value_percent * 100)
+                   vb.event_id, vb.market_type.value, vb.value_percent * 100)
         # Guardar decisión
         repository.save_decision(
             vb.event_id,
@@ -121,7 +159,11 @@ def run_value_betting(
             True,
             vb.value_percent,
             bankroll.calculate_stake_for_value(vb, config.get('bankroll', {})),
-            {"fair_probability": vb.fair_probability, "actual_odds": vb.actual_odds}
+            {
+                "fair_probability": vb.fair_probability,
+                "actual_odds": float(vb.actual_odds),
+                "market_type": vb.market_type.value
+            }
         )
     
     logger.info("=== VALUE BETTING COMPLETADO ===")
@@ -163,16 +205,20 @@ def run_dutching(
             True,
             dutch.coverage_percent,
             dutch.total_stake,
-            {"stakes": dutch.stakes, "expected_profit": dutch.expected_profit}
+            {
+                "stakes": dutch.stakes,
+                "expected_profit": float(dutch.expected_profit),
+                "market_type": dutch.market_type.value
+            }
         )
     
     logger.info("=== DUTCHING COMPLETADO ===")
 
 
-def run_all(connector, repository: Repository, bankroll: BankrollManager, config: dict) -> None:
+def run_all(connector, repository: Repository, bankroll: BankrollManager, config: dict, enabled_markets: Optional[list] = None) -> None:
     """Ejecuta todas las estrategias."""
     logger.info("=== EJECUTANDO TODAS LAS ESTRATEGIAS ===")
-    run_arbitrage(connector, repository, bankroll, config)
+    run_arbitrage(connector, repository, bankroll, config, enabled_markets)
     run_value_betting(connector, repository, bankroll, config)
     run_dutching(connector, repository, bankroll, config)
     logger.info("=== TODAS LAS ESTRATEGIAS COMPLETADAS ===")
@@ -210,6 +256,10 @@ def main():
         choices=["csv", "web"],
         default=None,
         help="Fuente de datos (csv o web). Si no se especifica, usa config.yaml"
+    )
+    parser.add_argument(
+        "--markets",
+        help="Mercados a procesar (separados por coma). Ej: '1X2,OVER_UNDER'"
     )
     parser.add_argument(
         "--config",
@@ -263,6 +313,14 @@ def main():
     else:
         connector = ConnectorFactory.create_from_config(config)
     
+    # Parsear mercados
+    enabled_markets = parse_markets(args.markets)
+    if not enabled_markets:
+        # Usar configuración
+        markets_config = config.get('markets', {})
+        enabled_markets_list = markets_config.get('enabled', ['1X2'])
+        enabled_markets = parse_markets(','.join(enabled_markets_list))
+    
     try:
         # Ejecutar estrategia seleccionada
         mode_map = {
@@ -272,15 +330,25 @@ def main():
             "all": run_all
         }
         
-        mode_map[args.mode](
-            connector, repository, bankroll, config
-        )
+        # Preparar kwargs
+        kwargs = {
+            "connector": connector,
+            "repository": repository,
+            "bankroll": bankroll,
+            "config": config
+        }
+        
+        if args.mode in ["arbitrage", "all"]:
+            kwargs["enabled_markets"] = enabled_markets
+        
+        mode_map[args.mode](**kwargs)
         
         # Mostrar resumen
         print("\n" + "=" * 50)
         print(f"📊 RESUMEN DE EJECUCIÓN")
         print(f"Modo: {args.mode}")
         print(f"Fuente: {args.source or config.get('connector', {}).get('type', 'csv')}")
+        print(f"Mercados: {', '.join([m.value for m in enabled_markets])}")
         print(f"Bankroll actual: {bankroll.get_balance():.2f} {bankroll.currency}")
         print("=" * 50 + "\n")
         

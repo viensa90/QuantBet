@@ -17,7 +17,7 @@ web_scraping:
     bet365:
       url: "https://www.bet365.es/"
       selectors:
-        "Local": ".odds-local-class"  # Selector real a configurar
+        "Local": ".odds-local-class"
         "Empate": ".odds-draw-class"
         "Visitante": ".odds-away-class"
       events:
@@ -41,6 +41,19 @@ web_scraping:
           name: "Real Madrid vs Barcelona"
           url: "https://www.williamhill.es/event/12345"
           market_type: "1X2"
+
+# Mercados habilitados
+markets:
+  enabled:
+    - "1X2"
+    - "OVER_UNDER"
+    - "ASIAN_HANDICAP"
+    - "DOUBLE_CHANCE"
+  # Configuración específica por mercado
+  over_under:
+    default_line: 2.5
+  asian_handicap:
+    default_handicap: 0.0
 
 # Decisiones
 decision:
@@ -67,3 +80,6 @@ fair_probabilities:
     Local: 0.40
     Empate: 0.30
     Visitante: 0.30
+  over_under:
+    Over: 0.50
+    Under: 0.50

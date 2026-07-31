@@ -1,125 +1,98 @@
 """
-QuantBet - Entidades del Dominio (QB-002)
-Implementación de los contratos definidos en el Modelo de Dominio Conceptual.
-Principio: Estas clases son independientes de cualquier fuente de datos o lógica de negocio.
-Versión 1.1 - Corrección de orden de campos en dataclasses.
+Entidades de dominio de QuantBet.
+Snapshots, Oportunidades, Decisiones con soporte multi-mercado.
 """
+
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from decimal import Decimal
 from enum import Enum
-import uuid
+from typing import Dict, Optional, List, Any
 
-# --- Enums de Soporte ---
 
-class SportType(Enum):
-    FOOTBALL = "football"
-    TENNIS = "tennis"
-    BASKETBALL = "basketball"
+class MarketType(Enum):
+    """Tipos de mercado soportados."""
+    MERCADO_1X2 = "1X2"
+    OVER_UNDER = "OVER_UNDER"
+    ASIAN_HANDICAP = "ASIAN_HANDICAP"
+    DOUBLE_CHANCE = "DOUBLE_CHANCE"
+    BOTH_TEAMS_SCORE = "BOTH_TEAMS_SCORE"
 
-class EventStatus(Enum):
-    PENDING = "PENDING"
-    LIVE = "LIVE"
-    FINISHED = "FINISHED"
-    SUSPENDED = "SUSPENDED"
-    CANCELLED = "CANCELLED"
 
-class BookmakerType(Enum):
-    TRADITIONAL_BOOKMAKER = "TRADITIONAL_BOOKMAKER"
-    PREDICTION_MARKET = "PREDICTION_MARKET"
-    SIMULATED = "SIMULATED"
-
-# --- Entidades Principales ---
-
-@dataclass(frozen=True)
-class Bookmaker:
-    """Casa de apuestas o fuente de datos (QB-002, 3.1.1)"""
-    id: str
-    name: str
-    type: BookmakerType
-
-@dataclass(frozen=True)
-class Sport:
-    """Deporte al que pertenece una competición (QB-002, 3.1.2)"""
-    id: str
-    name: str
-    type: SportType
-
-@dataclass(frozen=True)
-class Competition:
-    """Liga o torneo (QB-002, 3.1.2)"""
-    id: str
-    name: str
-    sport: Sport
-
-@dataclass(frozen=True)
-class Participant:
-    """Un equipo o jugador en un evento."""
-    name: str
-    type: str  # 'home' o 'away'
-
-@dataclass(frozen=True)
-class Event:
-    """Un partido o encuentro (QB-002, 3.1.4)"""
-    id: str
-    competition: Competition
-    start_time_utc: datetime
-    participants: List[Participant]
-    status: EventStatus = EventStatus.PENDING  # Valor por defecto va al final
-
-@dataclass(frozen=True)
-class Market:
-    """Un tipo de apuesta dentro de un evento (QB-002, 3.1.5)"""
-    id: str
-    event_id: str
-    type: str  # '1X2', 'OVER_UNDER_2.5', etc.
-    parameters: Dict[str, Any] = field(default_factory=dict)
-
-@dataclass(frozen=True)
-class Outcome:
-    """Una posible selección en un mercado (QB-002, 3.1.6)"""
-    id: str
-    market_id: str
-    name: str  # '1', 'X', 'Over 2.5'
-
-@dataclass(frozen=True)
+@dataclass
 class Snapshot:
-    """
-    La entidad central. Fotografía inmutable de las cuotas en un instante.
-    (QB-002, 3.2) - El activo más valioso del proyecto.
-    """
-    bookmaker: Bookmaker
-    market: Market
-    timestamp_utc: datetime
-    odds: Dict[str, float]
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    
-    def __post_init__(self):
-        """Reglas de integridad inmutables."""
-        # Validación: Las cuotas deben ser positivas
-        for outcome_name, odds_value in self.odds.items():
-            if odds_value <= 0:
-                raise ValueError(f"Cuota inválida para '{outcome_name}': {odds_value}. Debe ser > 0.")
+    """Snapshot inmutable de cuotas en un momento dado."""
+    event_id: str
+    event_name: str
+    source: str
+    timestamp: datetime
+    odds: Dict[str, Decimal]  # Ej: {"Local": 2.10, "Empate": 3.40, "Visitante": 3.80}
+    market_type: MarketType = MarketType.MERCADO_1X2
+    metadata: Dict[str, Any] = field(default_factory=dict)  # Línea de handicap, total de goles, etc.
 
-@dataclass(frozen=True)
+
+@dataclass
+class Opportunity:
+    """Oportunidad de arbitraje detectada."""
+    event_id: str
+    event_name: str
+    source: str
+    market_type: MarketType
+    arbitrage_percent: float  # Ej: 3.76
+    total_stake: Decimal
+    stakes: Dict[str, Decimal]  # Apuestas por mercado/resultado
+    odds_used: Dict[str, Decimal]  # Cuotas utilizadas
+    timestamp: datetime
+    metadata: Dict[str, Any] = field(default_factory=dict)  # Handicap, línea, etc.
+
+
+@dataclass
+class ScoredOpportunity:
+    """Oportunidad con puntuación."""
+    opportunity: Opportunity
+    score: float  # 0-100
+    risk_level: str  # "bajo", "medio", "alto"
+    reasoning: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ValueBet:
+    """Value bet detectado."""
+    event_id: str
+    event_name: str
+    source: str
+    market_type: MarketType
+    outcome: str  # "Local", "Empate", "Visitante", "Over", "Under", etc.
+    fair_probability: float  # Probabilidad justa estimada
+    actual_odds: Decimal  # Cuota actual
+    value_percent: float  # Valor positivo = buena oportunidad
+    timestamp: datetime
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class DutchingOpportunity:
+    """Oportunidad de dutching."""
+    event_id: str
+    event_name: str
+    market_type: MarketType
+    coverage_percent: float  # % de cobertura de todos los resultados
+    total_stake: Decimal
+    stakes: Dict[str, Decimal]  # Apuestas por resultado
+    expected_profit: Decimal
+    outcomes: List[str]  # Resultados cubiertos
+    timestamp: datetime
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class Decision:
-    """
-    Recomendación estructurada, objetiva y auditable.
-    (QB-004, 3.4) - La salida del Motor de Estrategias.
-    """
-    strategy: str
-    opportunity_score: float  # 0-100
-    snapshot_ids: List[str]
-    recommended_stake_total: float
-    expected_roi: float
-    details: Dict[str, Any] = field(default_factory=dict)
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    created_at_utc: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    ttl_seconds: int = 0
-    
-    def __post_init__(self):
-        """Validaciones de integridad."""
-        if self.opportunity_score < 0 or self.opportunity_score > 100:
-            raise ValueError(f"Opportunity Score debe estar entre 0 y 100. Valor: {self.opportunity_score}")
-        if self.recommended_stake_total <= 0:
-            raise ValueError(f"Stake recomendado debe ser positivo. Valor: {self.recommended_stake_total}")
+    """Decisión registrada en BD (auditable)."""
+    event_id: str
+    source: str
+    strategy: str  # "ARBITRAGE", "VALUE_BET", "DUTCHING"
+    accepted: bool
+    score: Optional[float]
+    stake: Optional[Decimal]
+    metadata: Dict[str, Any]
+    timestamp: datetime

@@ -1,151 +1,131 @@
 """
-QuantBet - Módulo de Persistencia (QB-005)
-Gestor de la base de datos SQLite.
+src/storage/database.py
+Singleton para conexión SQLite optimizada
 """
-import sqlite3
-import os
-from typing import Optional
 
-class DatabaseManager:
-    """
-    Administra la conexión a la base de datos SQLite.
-    Patrón: Singleton simple para el MVP (una sola instancia global).
-    """
-    _instance: Optional['DatabaseManager'] = None
+import sqlite3
+import logging
+from contextlib import contextmanager
+from typing import Generator, Optional
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+class Database:
+    """Singleton para gestión de conexión SQLite con optimizaciones"""
+    
+    _instance: Optional['Database'] = None
     _connection: Optional[sqlite3.Connection] = None
     
     def __new__(cls, db_path: str = "quantbet.db"):
         if cls._instance is None:
-            cls._instance = super(DatabaseManager, cls).__new__(cls)
+            cls._instance = super(Database, cls).__new__(cls)
             cls._instance._db_path = db_path
+            cls._instance._initialize()
         return cls._instance
     
-    def get_connection(self) -> sqlite3.Connection:
-        """Obtiene la conexión actual o crea una nueva si no existe."""
+    def _initialize(self):
+        """Inicializa la conexión con optimizaciones de rendimiento"""
         if self._connection is None:
-            self._connection = sqlite3.connect(self._db_path)
-            self._connection.row_factory = sqlite3.Row  # Permite acceso por nombre de columna
-            self._connection.execute("PRAGMA journal_mode=WAL")  # Mejor rendimiento concurrente
-            self._connection.execute("PRAGMA foreign_keys = ON")  # Integridad referencial
-            self._initialize_database()
-        return self._connection
+            # Asegurar directorio
+            Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
+            
+            self._connection = sqlite3.connect(
+                self._db_path,
+                timeout=10.0,  # Timeout para operaciones bloqueadas
+                check_same_thread=False,  # Permitir uso en múltiples hilos
+                isolation_level=None  # Modo autocommit
+            )
+            
+            # PRAGMAS de rendimiento
+            self._connection.execute("PRAGMA journal_mode=WAL;")
+            self._connection.execute("PRAGMA synchronous=NORMAL;")
+            self._connection.execute("PRAGMA cache_size=-20000;")  # 20MB
+            self._connection.execute("PRAGMA temp_store=MEMORY;")
+            self._connection.execute("PRAGMA foreign_keys=ON;")
+            
+            # Row factory para acceso por nombre de columna
+            self._connection.row_factory = sqlite3.Row
+            
+            logger.info(f"Base de datos SQLite inicializada: {self._db_path}")
+            logger.info("Optimizaciones aplicadas: WAL, NORMAL sync, cache 20MB")
     
-    def _initialize_database(self):
-        """
-        Crea las tablas si no existen.
-        Cumple estrictamente el modelo de dominio QB-002.
-        Principio: Historial Inmutable. Solo INSERT, nunca UPDATE ni DELETE sobre Snapshots y Decisions.
-        """
-        cursor = self._connection.cursor()
+    @contextmanager
+    def get_connection(self) -> Generator[sqlite3.Connection, None, None]:
+        """Context manager para obtener conexión"""
+        if self._connection is None:
+            self._initialize()
         
-        # Tabla: Sports
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS sports (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                type TEXT NOT NULL
-            )
-        """)
-        
-        # Tabla: Competitions
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS competitions (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                sport_id TEXT NOT NULL,
-                FOREIGN KEY (sport_id) REFERENCES sports(id)
-            )
-        """)
-        
-        # Tabla: Events
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS events (
-                id TEXT PRIMARY KEY,
-                competition_id TEXT NOT NULL,
-                start_time_utc TEXT NOT NULL,
-                home_participant TEXT NOT NULL,
-                away_participant TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'PENDING',
-                FOREIGN KEY (competition_id) REFERENCES competitions(id)
-            )
-        """)
-        
-        # Tabla: Bookmakers
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS bookmakers (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                type TEXT NOT NULL
-            )
-        """)
-        
-        # Tabla: Markets
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS markets (
-                id TEXT PRIMARY KEY,
-                event_id TEXT NOT NULL,
-                type TEXT NOT NULL,
-                parameters TEXT,  -- JSON string para flexibilidad
-                FOREIGN KEY (event_id) REFERENCES events(id)
-            )
-        """)
-        
-        # Tabla: Outcomes
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS outcomes (
-                id TEXT PRIMARY KEY,
-                market_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                FOREIGN KEY (market_id) REFERENCES markets(id)
-            )
-        """)
-        
-        # Tabla: Snapshots (EL ACTIVO PRINCIPAL - INMUTABLE)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS snapshots (
-                id TEXT PRIMARY KEY,
-                bookmaker_id TEXT NOT NULL,
-                market_id TEXT NOT NULL,
-                timestamp_utc TEXT NOT NULL,
-                odds_json TEXT NOT NULL,  -- Diccionario Outcome -> Cuota en formato JSON
-                status TEXT NOT NULL DEFAULT 'ACTIVE',
-                hash TEXT,
-                FOREIGN KEY (bookmaker_id) REFERENCES bookmakers(id),
-                FOREIGN KEY (market_id) REFERENCES markets(id)
-            )
-        """)
-        
-        # Tabla: Decisions (AUDITABLE - INMUTABLE)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS decisions (
-                id TEXT PRIMARY KEY,
-                strategy TEXT NOT NULL,
-                opportunity_score REAL NOT NULL,
-                snapshot_ids_json TEXT NOT NULL,  -- Lista de IDs en formato JSON
-                recommended_stake_total REAL NOT NULL,
-                expected_roi REAL NOT NULL,
-                details_json TEXT,  -- Diccionario con detalles específicos
-                created_at_utc TEXT NOT NULL,
-                ttl_seconds INTEGER DEFAULT 0
-            )
-        """)
-        
-        # Tabla: Bankroll (Historial de cambios)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS bankroll_history (
-                id TEXT PRIMARY KEY,
-                timestamp_utc TEXT NOT NULL,
-                total_capital REAL NOT NULL,
-                available_capital REAL NOT NULL,
-                committed_capital REAL NOT NULL,
-                currency TEXT NOT NULL DEFAULT 'PYG'
-            )
-        """)
-        
-        self._connection.commit()
+        try:
+            yield self._connection
+        except sqlite3.Error as e:
+            logger.error(f"Error en operación SQLite: {e}")
+            self._connection.rollback()
+            raise
+        finally:
+            # No cerramos la conexión, solo liberamos recursos si es necesario
+            pass
+    
+    @contextmanager
+    def get_cursor(self) -> Generator[sqlite3.Cursor, None, None]:
+        """Context manager para obtener cursor"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                yield cursor
+            finally:
+                cursor.close()
+    
+    def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
+        """Ejecuta SQL directamente con parámetros"""
+        with self.get_cursor() as cursor:
+            cursor.execute(sql, params)
+            return cursor
+    
+    def executemany(self, sql: str, params: list) -> sqlite3.Cursor:
+        """Ejecuta SQL con múltiples parámetros"""
+        with self.get_cursor() as cursor:
+            cursor.executemany(sql, params)
+            return cursor
     
     def close(self):
-        """Cierra la conexión a la base de datos."""
+        """Cierra la conexión (para testing/cleanup)"""
         if self._connection:
             self._connection.close()
             self._connection = None
+            logger.info("Conexión SQLite cerrada")
+    
+    def get_connection_stats(self) -> dict:
+        """Retorna estadísticas de la conexión"""
+        if not self._connection:
+            return {"status": "not_initialized"}
+        
+        cursor = self._connection.cursor()
+        
+        # Obtener tamaño de la BD
+        cursor.execute("SELECT page_count * page_size FROM pragma_page_count, pragma_page_size;")
+        size_bytes = cursor.fetchone()[0]
+        
+        # Obtener número de tablas
+        cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
+        table_count = cursor.fetchone()[0]
+        
+        # Estado de WAL
+        cursor.execute("PRAGMA journal_mode;")
+        journal_mode = cursor.fetchone()[0]
+        
+        cursor.close()
+        
+        return {
+            "status": "connected",
+            "db_path": self._db_path,
+            "size_mb": round(size_bytes / (1024 * 1024), 2),
+            "table_count": table_count,
+            "journal_mode": journal_mode,
+            "cache_size": -20000  # 20MB
+        }
+
+# Función de utilidad para acceder a la instancia
+def get_db(db_path: str = "quantbet.db") -> Database:
+    """Retorna la instancia singleton de Database"""
+    return Database(db_path)

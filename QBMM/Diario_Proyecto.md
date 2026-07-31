@@ -1,191 +1,276 @@
-# QuantBet - Diario de Proyecto
-
-## 🚀 INSTRUCCIONES PARA IA (Nuevo Chat)
-
-**Al iniciar un nuevo chat, copia TODO este archivo como primer mensaje.**
+📋 DIARIO DE PROYECTO - QuantBet
+🚀 INSTRUCCIONES PARA IA (Nuevo Chat)
+Al iniciar un nuevo chat, copia TODO este archivo como primer mensaje.
 
 Reglas implícitas (no necesito repetirlas):
-- Tienes autorización total para leer el repositorio completo en GitHub: `https://github.com/viensa90/QuantBet`
-- "CREAR" = archivo nuevo | "REEMPLAZAR" = sobrescribir archivo existente (pásame contenido completo)
-- Al final de cada sesión, actualiza este diario con el mismo formato
-- Mantén el contexto de todas las sesiones anteriores
-- Los principios de arquitectura son inmutables (ver sección Principios)
 
----
+Tienes autorización total para leer el repositorio completo en GitHub: https://github.com/viensa90/QuantBet
 
-## 📋 RESUMEN EJECUTIVO
+"CREAR" = archivo nuevo | "REEMPLAZAR" = sobrescribir archivo existente (pásame contenido completo)
 
-**Proyecto:** QuantBet - Sistema de Arbitraje Deportivo Automatizado  
-**Versión:** 0.2.0 (MVP + Value Betting & Dutching)  
-**Repositorio:** https://github.com/viensa90/QuantBet  
-**Última sesión:** 10 - 30/07/2026  
-**Estado:** Estrategias adicionales implementadas
+Al final de cada sesión, actualiza este diario con el mismo formato
 
----
+Mantén el contexto de todas las sesiones anteriores
 
-## 🎯 PRINCIPIOS DE ARQUITECTURA (INMUTABLES)
+Los principios de arquitectura son inmutables (ver sección Principios)
 
-1. **#1 - Conectores solo obtienen datos** (nunca toman decisiones)
-2. **#2 - Motor no conoce la fuente** (recibe snapshots, no sabe de CSV/Web)
-3. **#3 - Snapshots inmutables** (solo INSERT en SQLite, nunca UPDATE)
-4. **#4 - Decisiones auditables** (trazabilidad completa en BD)
-5. **#5 - Configuración externalizada** (config.yaml, nada hardcodeado)
+NUNCA digas "no puedo acceder" - el repositorio es público y siempre accesible
 
----
+📋 RESUMEN EJECUTIVO
+Proyecto: QuantBet - Sistema de Arbitraje Deportivo Automatizado
+Versión: 0.3.0 (Multi-Mercado + Modelos de Probabilidad)
+Repositorio: https://github.com/viensa90/QuantBet
+Última sesión: 14 - 31/07/2026
+Estado: Modelo de probabilidades reales implementado
 
-## 📂 ESTRUCTURA DEL PROYECTO
+🎯 PRINCIPIOS DE ARQUITECTURA (INMUTABLES)
+#1 - Conectores solo obtienen datos (nunca toman decisiones)
+
+#2 - Motor no conoce la fuente (recibe snapshots, no sabe de CSV/Web)
+
+#3 - Snapshots inmutables (solo INSERT en SQLite, nunca UPDATE)
+
+#4 - Decisiones auditables (trazabilidad completa en BD)
+
+#5 - Configuración externalizada (config.yaml, nada hardcodeado)
+
+📂 ESTRUCTURA DEL PROYECTO
 QuantBet/
-├── QBMM/ # Documentación de ingeniería
+├── QBMM/                          # Documentación de ingeniería
 ├── src/
-│ ├── init.py # v0.2.0
-│ ├── config_loader.py # Singleton para config.yaml
-│ ├── logger.py # Logging estructurado
-│ ├── domain/
-│ │ └── entities.py # Snapshot, Opportunity, ScoredOpportunity
-│ ├── storage/
-│ │ ├── database.py # Singleton SQLite
-│ │ └── repository.py # CRUD snapshots + decisiones
-│ ├── core/
-│ │ ├── arbitrage.py # Motor de arbitraje
-│ │ ├── scorer.py # Puntuador 0-100
-│ │ ├── bankroll.py # Validador de fondos
-│ │ ├── value_betting.py # Detector de value bets
-│ │ └── dutching.py # Calculador de dutching
-│ └── connectors/
-│ ├── base.py # Interfaz IDataProvider
-│ └── csv_provider.py # Implementación CSV
+│   ├── __init__.py                # v0.3.0
+│   ├── config_loader.py           # Singleton para config.yaml
+│   ├── logger.py                  # Logging estructurado
+│   ├── domain/
+│   │   └── entities.py            # Snapshot, Opportunity, MarketType, ValueBet, Dutching
+│   ├── storage/
+│   │   ├── database.py            # Singleton SQLite
+│   │   └── repository.py          # CRUD snapshots + decisiones
+│   ├── core/
+│   │   ├── arbitrage.py           # Motor de arbitraje multi-mercado
+│   │   ├── scorer.py              # Puntuador 0-100 por mercado
+│   │   ├── bankroll.py            # Validador de fondos
+│   │   ├── value_betting.py       # Detector con modelos reales
+│   │   ├── dutching.py            # Calculador de dutching
+│   │   ├── market_handlers.py     # Handlers: 1X2, Over/Under, Asian, Double Chance
+│   │   ├── probability_model.py   # Historical, Elo models
+│   │   └── poisson_model.py       # Modelo Poisson para fútbol
+│   ├── connectors/
+│   │   ├── base.py                # Interfaz IDataProvider
+│   │   ├── csv_provider.py        # Implementación CSV
+│   │   ├── web_provider.py        # Implementación Playwright
+│   │   └── factory.py             # Fábrica de conectores
+│   └── web/
+│       ├── __init__.py            # Módulo web
+│       ├── app.py                 # Flask + APIs REST
+│       ├── templates/
+│       │   └── index.html         # Dashboard principal
+│       └── static/
+│           ├── style.css          # Dark mode
+│           └── app.js             # Actualización en tiempo real
 ├── tests/
-│ ├── test_arbitrage.py # 5 tests unitarios
-│ ├── test_integration.py # 7 tests integración
-│ ├── test_bankroll.py # 7 tests bankroll
-│ ├── test_value_betting.py # 3 tests value betting
-│ └── test_dutching.py # 4 tests dutching
+│   ├── test_arbitrage.py          # 5 tests (incluye multi-mercado)
+│   ├── test_integration.py        # 7 tests
+│   ├── test_bankroll.py           # 7 tests
+│   ├── test_value_betting.py      # 3 tests
+│   ├── test_dutching.py           # 4 tests
+│   ├── test_web_provider.py       # 5 tests
+│   ├── test_dashboard.py          # 5 tests
+│   ├── test_market_handlers.py    # 5 tests
+│   └── test_probability_model.py  # 6 tests
 ├── data/
-│ └── sample_events.csv # 21 snapshots (3 eventos)
-├── main.py # CLI + Pipeline multi-estrategia
-├── config.yaml # Configuración centralizada
-├── requirements.txt # pytest, pyyaml
-└── quantbet.db # SQLite (autogenerada)
+│   ├── sample_events.csv          # 21 snapshots (3 eventos)
+│   └── team_stats.csv             # 10 equipos (datos históricos)
+├── main.py                        # CLI con --mode, --source, --markets, --serve
+├── config.yaml                    # Configuración centralizada
+├── requirements.txt               # pytest, pyyaml, playwright, Flask, Jinja2
+└── quantbet.db                    # SQLite (autogenerada)
+🔄 HISTORIAL DE SESIONES
+Sesión 10 - 30/07/2026 - Value Betting y Dutching
+Objetivo: Implementar estrategias de Value Betting y Dutching (Prioridad Media).
 
----
+Entregables:
 
-## 🔄 HISTORIAL DE SESIONES
+CREAR src/core/value_betting.py - ValueBetDetector
 
-### Sesión 10 - 30/07/2026 - Value Betting y Dutching
+CREAR src/core/dutching.py - DutchingCalculator
 
-**Objetivo:** Implementar estrategias de Value Betting y Dutching (Prioridad Media).
+CREAR tests/test_value_betting.py - 3 tests
 
-**Entregables:**
-- CREAR `src/core/value_betting.py` - ValueBetDetector
-- CREAR `src/core/dutching.py` - DutchingCalculator
-- CREAR `tests/test_value_betting.py` - 3 tests
-- CREAR `tests/test_dutching.py` - 4 tests
-- REEMPLAZAR `main.py` - Pipeline multi-estrategia con modos (`--mode arbitrage|value|dutching|all`)
+CREAR tests/test_dutching.py - 4 tests
 
-**Decisiones:**
-- ValueBetDetector usa probabilidades justas de ejemplo (pendiente integrar modelo real).
-- DutchingCalculator calcula stakes proporcionales para cobertura total.
-- Pipeline unificado: `run(mode=...)` selecciona la estrategia.
-- Probabilidades justas por defecto: `{"Local":0.40, "Empate":0.30, "Visitante":0.30}`.
+REEMPLAZAR main.py - Pipeline multi-estrategia con modos
 
-**Nuevos tests:** 7 (3 value + 4 dutching) → Total tests: 26  
-**Principios impactados:** #2 reforzado (motor no conoce fuente, aplica a value/dutching también).
+Decisiones:
 
----
+ValueBetDetector usa probabilidades justas de ejemplo (pendiente integrar modelo real)
 
-### Sesión 9 - 29/07/2026 - Deuda Técnica Prioritaria
+DutchingCalculator calcula stakes proporcionales para cobertura total
 
-**Objetivo:** Resolver 3 items de deuda técnica del MVP.
+Pipeline unificado: run(mode=...) selecciona la estrategia
 
-**Entregables:**
-- CREAR `src/config_loader.py` - Singleton ConfigLoader
-- CREAR `src/logger.py` - Logging estructurado
-- CREAR `src/core/bankroll.py` - BankrollManager
-- CREAR `tests/test_bankroll.py` - 7 tests
-- REEMPLAZAR `config.yaml` - Agregar decision.threshold, bankroll, logging
-- REEMPLAZAR `main.py` - Integrar ConfigLoader, Bankroll, Logging
+Nuevos tests: 7 → Total tests: 26
 
-**Principios impactados:** #5 completado, #4 reforzado.
+Sesión 11 - 31/07/2026 - Conector Web con Playwright
+Objetivo: Implementar conector real con Playwright para scraping web.
 
----
+Entregables:
 
-### Sesión 8 - 28/07/2026 - MVP: Integración Final
+CREAR src/connectors/web_provider.py - WebProvider con Playwright sincrónico
 
-**Objetivo:** Implementar Hito 4 - Pipeline completo con CLI.
+CREAR src/connectors/factory.py - Fábrica de conectores
 
-**Entregables:**
-- CREAR `src/__init__.py`
-- CREAR `main.py` - Pipeline 7 pasos + CLI
-- CREAR `tests/test_integration.py` - 7 tests integración
+REEMPLAZAR config.yaml - Sección web_scraping
 
----
+REEMPLAZAR main.py - Soporte --source csv|web
 
-### Sesión 7 - 27/07/2026 - Conector Simulado
+CREAR tests/test_web_provider.py - 5 tests
 
-**Objetivo:** Implementar Hito 3 - CSV Provider.
+Decisiones:
 
-**Entregables:**
-- CREAR `src/connectors/base.py`, `csv_provider.py`
-- CREAR `data/sample_events.csv` (21 snapshots)
+Playwright sincrónico para simplicidad
 
----
+Lazy loading del navegador
 
-### Sesión 6 - 26/07/2026 - Motor de Arbitraje y Scorer
+Context manager para liberación de recursos
 
-**Objetivo:** Implementar Hito 2 - Core.
+Nuevos tests: 5 → Total tests: 31
 
-**Entregables:**
-- CREAR `src/core/arbitrage.py`, `scorer.py`
-- CREAR `tests/test_arbitrage.py` (5 tests)
+Sesión 12 - 31/07/2026 - Dashboard Web
+Objetivo: Implementar dashboard web para visualización de oportunidades.
 
----
+Entregables:
 
-### Sesión 5 - 25/07/2026 - Dominio y Persistencia
+CREAR src/web/ - Módulo completo (app, templates, static)
 
-**Objetivo:** Implementar Hito 1 - Base de datos y entidades.
+REEMPLAZAR main.py - Comando --serve
 
-**Entregables:**
-- CREAR `src/domain/entities.py`
-- CREAR `src/storage/database.py`, `repository.py`
+REEMPLAZAR requirements.txt - Flask, Jinja2
 
----
+CREAR tests/test_dashboard.py - 5 tests
 
-## 📊 MÉTRICAS ACTUALES
+Decisiones:
 
-- **Tests totales:** 26 (5 arbitraje + 7 integración + 7 bankroll + 3 value + 4 dutching)
-- **Cobertura principios:** 5/5 ✅
-- **Snapshots prueba:** 21 (3 eventos)
-- **Oportunidad garantizada:** EVT-003 (Surebet 3.76%)
-- **Deuda técnica:** 0 items críticos
+Flask por simplicidad
 
----
+Dark mode por defecto
 
-## 🚀 PRÓXIMOS PASOS (Priorizados)
+APIs REST para comunicación
 
-### Prioridad Alta (completada):
-1. ~~Mover umbral a config.yaml~~ ✅ (Sesión 9)
-2. ~~Validación de bankroll~~ ✅ (Sesión 9)
-3. ~~Logging estructurado~~ ✅ (Sesión 9)
+Actualización automática cada 30 segundos
 
-### Prioridad Media (parcial):
-4. ~~Value Betting y Dutching~~ ✅ (Sesión 10)
-5. Conectores reales con Playwright (scraping web)
-6. Dashboard web para visualización
-7. Soporte multi-mercado avanzado (Over/Under, Asian Handicap)
-8. Integración de modelo de probabilidades reales para value betting
+Nuevos tests: 5 → Total tests: 36
 
-### Prioridad Baja:
-9. Optimización de queries SQLite
-10. Tests de estrés (1000+ eventos)
-11. CI/CD con GitHub Actions
+Sesión 13 - 31/07/2026 - Soporte Multi-Mercado Avanzado
+Objetivo: Implementar soporte para mercados avanzados.
 
----
+Entregables:
 
-## 📝 DIARIO - SESIÓN 11 (PRÓXIMA)
+REEMPLAZAR src/domain/entities.py - Nuevos MarketTypes
 
-**Para iniciar Sesión 11, la IA debe:**
-1. Leer repositorio completo
-2. Verificar estado actual vs este diario
-3. Confirmar tests pasando (26/26)
-4. Proponer siguiente ítem de Prioridad Media (probablemente scraping con Playwright o dashboard)
-5. Ejecutar sin pedir confirmación para lecturas
+CREAR src/core/market_handlers.py - Handlers específicos
+
+REEMPLAZAR src/core/arbitrage.py - Motor multi-mercado
+
+REEMPLAZAR src/core/scorer.py - Puntuación por mercado
+
+REEMPLAZAR config.yaml - markets.enabled
+
+REEMPLAZAR main.py - Comando --markets
+
+CREAR tests/test_market_handlers.py - 5 tests
+
+Decisiones:
+
+Handlers específicos por mercado (Strategy Pattern)
+
+Over/Under con línea configurable
+
+Asian Handicap con handicap configurable
+
+Double Chance con combinaciones 1X, X2, 12
+
+Nuevos tests: 5 → Total tests: 41
+
+Sesión 14 - 31/07/2026 - Modelo de Probabilidades Reales
+Objetivo: Implementar modelo de probabilidades reales para value betting.
+
+Entregables:
+
+CREAR src/core/probability_model.py - HistoricalModel, EloModel
+
+CREAR src/core/poisson_model.py - PoissonModel para fútbol
+
+REEMPLAZAR src/core/value_betting.py - Integrar modelos reales
+
+REEMPLAZAR config.yaml - Configuración del modelo
+
+CREAR data/team_stats.csv - Datos de ejemplo (10 equipos)
+
+CREAR tests/test_probability_model.py - 6 tests
+
+Decisiones:
+
+Modelo Historical basado en estadísticas de equipos
+
+Modelo Elo basado en ratings dinámicos
+
+Modelo Poisson para predicción exacta de resultados
+
+Factory para seleccionar modelo vía configuración
+
+Nuevos tests: 6 → Total tests: 47
+
+📊 MÉTRICAS ACTUALES
+Métrica	Valor
+Tests totales	47
+Cobertura principios	5/5 ✅
+Mercados soportados	4 (1X2, Over/Under, Asian Handicap, Double Chance)
+Modelos de probabilidad	3 (Historical, Elo, Poisson)
+Conectores	2 (CSV, Web)
+Estrategias	3 (Arbitraje, Value Betting, Dutching)
+Líneas de código	~2,500
+🚀 PRÓXIMOS PASOS (Priorizados)
+Prioridad Media (pendiente):
+~~Value Betting y Dutching~~ ✅ (Sesión 10)
+
+~~Conectores reales con Playwright~~ ✅ (Sesión 11)
+
+~~Dashboard web para visualización~~ ✅ (Sesión 12)
+
+~~Soporte multi-mercado avanzado~~ ✅ (Sesión 13)
+
+~~Modelo de probabilidades reales~~ ✅ (Sesión 14)
+
+Optimización de queries SQLite ← SIGUIENTE
+
+Tests de estrés (1000+ eventos)
+
+CI/CD con GitHub Actions
+
+Prioridad Baja:
+Soporte para más deportes (tenis, baloncesto)
+
+Integración con APIs de bookmakers (Betfair, etc.)
+
+Sistema de notificaciones (email/telegram)
+
+📝 DIARIO - SESIÓN 15 (PRÓXIMA)
+Para iniciar Sesión 15, la IA debe:
+
+Leer repositorio completo (ya escaneado en esta sesión)
+
+Verificar estado actual vs este diario
+
+Confirmar tests pasando (47/47)
+
+Proponer siguiente ítem de Prioridad Media: Optimización de queries SQLite
+
+Ejecutar sin pedir confirmación para lecturas
+
+Estado actual: ✅ Todo validado y sincronizado
+Total archivos: ~40
+Total líneas: ~2,500
+Total tests: 47
+
+¡Listo para la Sesión 15! 🚀

@@ -1,109 +1,70 @@
-# Configuración general de QuantBet
-version: "0.2.0"
+# QuantBet - Configuración Centralizada
+version: "0.3.1"
 
-# Configuración del conector
-connector:
-  type: "csv"  # opciones: "csv", "web"
-  
-# Configuración CSV (para pruebas)
-csv:
-  file_path: "data/sample_events.csv"
+# Estrategias habilitadas
+strategies:
+  arbitrage: true
+  value_betting: true
+  dutching: true
 
-# Configuración Web Scraping
-web_scraping:
-  headless: true
-  timeout: 30000  # milisegundos
-  bookmakers:
-    bet365:
-      url: "https://www.bet365.es/"
-      selectors:
-        "Local": ".odds-local-class"
-        "Empate": ".odds-draw-class"
-        "Visitante": ".odds-away-class"
-      events:
-        - id: "EVT-001"
-          name: "Real Madrid vs Barcelona"
-          url: "https://www.bet365.es/event/12345"
-          market_type: "1X2"
-        - id: "EVT-002"
-          name: "Bayern vs Dortmund"
-          url: "https://www.bet365.es/event/67890"
-          market_type: "1X2"
-    
-    william_hill:
-      url: "https://www.williamhill.es/"
-      selectors:
-        "Local": ".wh-odds-home"
-        "Empate": ".wh-odds-draw"
-        "Visitante": ".wh-odds-away"
-      events:
-        - id: "EVT-001"
-          name: "Real Madrid vs Barcelona"
-          url: "https://www.williamhill.es/event/12345"
-          market_type: "1X2"
-
-# Mercados habilitados
+# Mercados soportados
 markets:
   enabled:
     - "1X2"
-    - "OVER_UNDER"
-    - "ASIAN_HANDICAP"
-    - "DOUBLE_CHANCE"
-  # Configuración específica por mercado
-  over_under:
-    default_line: 2.5
-  asian_handicap:
-    default_handicap: 0.0
+    - "Over/Under"
+    - "Asian Handicap"
+    - "Double Chance"
+  over_under_lines: [0.5, 1.5, 2.5, 3.5]
+  asian_handicaps: [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0]
 
-# Modelo de probabilidades
+# Umbrales y parámetros
+thresholds:
+  min_profit_percent: 1.5
+  min_value_probability: 0.65
+  min_dutching_odds: 2.0
+  max_risk_per_bet: 0.02  # 2% del bankroll
+
+# Modelo de probabilidad
 probability_model:
-  type: "historical"  # opciones: "historical", "elo"
-  # Datos históricos (opcional)
-  historical_data:
-    teams:
-      Real Madrid:
-        home_win_rate: 0.70
-        draw_rate: 0.20
-        away_win_rate: 0.10
-        goals_scored_avg: 2.10
-        goals_conceded_avg: 0.90
-        strength: 0.85
-      Barcelona:
-        home_win_rate: 0.65
-        draw_rate: 0.25
-        away_win_rate: 0.10
-        goals_scored_avg: 2.00
-        goals_conceded_avg: 1.00
-        strength: 0.80
-      Atletico Madrid:
-        home_win_rate: 0.60
-        draw_rate: 0.30
-        away_win_rate: 0.10
-        goals_scored_avg: 1.50
-        goals_conceded_avg: 0.70
-        strength: 0.75
-  # Ratings Elo (para modelo Elo)
-  elo_ratings:
-    Real Madrid: 2100
-    Barcelona: 2050
-    Atletico Madrid: 1950
-    Sevilla: 1850
+  type: "historical"  # historical | elo | poisson
+  use_team_stats: true
+  elo_default_rating: 1500
+  poisson_goals_avg: 1.5
 
-# Decisiones
-decision:
-  min_arbitrage_percent: 2.0  # % mínimo para considerar surebet
-  min_value_threshold: 0.05   # 5% de valor mínimo
-  max_stake_percent: 0.10     # 10% del bankroll por apuesta
+# Conectores
+connectors:
+  csv:
+    data_dir: "data/"
+    events_file: "sample_events.csv"
+    team_stats_file: "team_stats.csv"
+  
+  web:
+    provider: "playwright"
+    headless: true
+    timeout: 30000
+    urls:
+      - "https://example.com/odds"
+      - "https://example.com/live"
 
-# Bankroll
-bankroll:
-  initial: 1000.0
-  currency: "EUR"
-  max_single_bet: 100.0
-  min_single_bet: 10.0
+# Base de datos y rendimiento
+database:
+  path: "quantbet.db"
+  pool_size: 5
+  timeout: 10.0
+  cache_size_mb: 20
+  journal_mode: "WAL"
+  synchronous: "NORMAL"
+  cleanup_days: 30
+
+# Dashboard web
+web:
+  host: "0.0.0.0"
+  port: 5000
+  debug: true
+  refresh_seconds: 30
 
 # Logging
 logging:
-  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   file: "quantbet.log"

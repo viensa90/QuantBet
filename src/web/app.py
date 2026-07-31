@@ -1,138 +1,181 @@
 """
-Aplicación web con Flask para dashboard de QuantBet.
+src/web/app.py
+Servidor Flask con APIs REST - Optimizado con market_summary
 """
 
-import json
+import os
+import sys
+from pathlib import Path
+from flask import Flask, jsonify, render_template, request
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request
-from typing import Dict, Any, List
+import logging
 
-from src.config_loader import ConfigLoader
-from src.storage.database import Database
+# Configurar path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from src.storage.database import get_db
 from src.storage.repository import Repository
-from src.logger import get_logger
+from src.storage.migrations import apply_migrations
+from src.core.scorer import OpportunityScorer
+from src.core.arbitrage import ArbitrageEngine
+from src.config_loader import config
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
+app = Flask(__name__, 
+            template_folder='templates',
+            static_folder='static')
 
-def create_app(config_path: str = "config.yaml") -> Flask:
-    """
-    Crea la aplicación Flask con configuración.
-    
-    Args:
-        config_path: Ruta al archivo de configuración
-        
-    Returns:
-        Flask: Aplicación configurada
-    """
-    app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'quantbet-dashboard-secret'
-    
-    # Cargar configuración
-    config_loader = ConfigLoader(config_path)
-    config = config_loader.load()
-    
-    # Inicializar repositorio
-    db_path = config.get('database', {}).get('path', 'quantbet.db')
-    db = Database(db_path)
-    repository = Repository(db)
-    
-    # Almacenar en app context
-    app.config['REPOSITORY'] = repository
-    app.config['CONFIG'] = config
-    
-    # Registrar rutas
-    register_routes(app)
-    
-    return app
+# Singleton de repositorio
+repo = None
+scorer = None
+arbitrage_engine = None
 
+def init_app():
+    """Inicializa la aplicación con migraciones y configuración"""
+    global repo, scorer, arbitrage_engine
+    
+    # Aplicar migraciones
+    apply_migrations()
+    
+    # Inicializar componentes
+    repo = Repository()
+    scorer = OpportunityScorer()
+    arbitrage_engine = ArbitrageEngine()
+    
+    logger.info("Dashboard web inicializado con optimizaciones")
 
-def register_routes(app: Flask):
-    """Registra todas las rutas del dashboard."""
+# === RUTAS PÚBLICAS ===
+
+@app.route('/')
+def index():
+    """Dashboard principal"""
+    return render_template('index.html', 
+                          version=config.get('version', '0.3.0'),
+                          timestamp=datetime.now().isoformat())
+
+@app.route('/api/summary')
+def get_summary():
+    """API para resumen de mercado (rápido, desde market_summary)"""
+    limit = request.args.get('limit', 50, type=int)
+    min_opps = request.args.get('min_opportunities', 1, type=int)
     
-    @app.route('/')
-    def index():
-        """Página principal del dashboard."""
-        return render_template('index.html')
+    summary = repo.get_market_summary(limit=limit, min_opportunities=min_opps)
+    return jsonify({
+        "status": "success",
+        "timestamp": datetime.now().isoformat(),
+        "count": len(summary),
+        "data": summary
+    })
+
+@app.route('/api/snapshots/latest')
+def get_latest_snapshots():
+    """Últimos snapshots (optimizado con índice)"""
+    limit = request.args.get('limit', 20, type=int)
+    snapshots = repo.get_latest_snapshots(limit=limit)
     
-    @app.route('/api/snapshots')
-    def get_snapshots():
-        """API: Obtener snapshots recientes."""
-        repository = app.config['REPOSITORY']
-        limit = request.args.get('limit', 50, type=int)
-        
-        snapshots = repository.get_latest_snapshots(limit)
-        
-        return jsonify([{
-            'event_id': s.event_id,
-            'event_name': s.event_name,
-            'source': s.source,
-            'timestamp': s.timestamp.isoformat(),
-            'odds': {k: float(v) for k, v in s.odds.items()},
-            'market_type': s.market_type.value
-        } for s in snapshots])
+    return jsonify({
+        "status": "success",
+        "timestamp": datetime.now().isoformat(),
+        "count": len(snapshots),
+        "data": [
+            {
+                "event_id": s.event_id,
+                "event_name": s.event_name,
+                "market_type": s.market_type,
+                "bookmaker": s.bookmaker,
+                "odds": s.odds_data,
+                "timestamp": s.timestamp.isoformat()
+            }
+            for s in snapshots
+        ]
+    })
+
+@app.route('/api/opportunities/top')
+def get_top_opportunities():
+    """Top oportunidades (optimizado con índice)"""
+    limit = request.args.get('limit', 10, type=int)
+    min_score = request.args.get('min_score', 70, type=float)
     
-    @app.route('/api/opportunities')
-    def get_opportunities():
-        """API: Obtener oportunidades de arbitraje."""
-        repository = app.config['REPOSITORY']
-        limit = request.args.get('limit', 20, type=int)
-        
-        decisions = repository.get_latest_decisions(limit)
-        
-        return jsonify([{
-            'event_id': d.event_id,
-            'source': d.source,
-            'strategy': d.strategy,
-            'accepted': d.accepted,
-            'score': float(d.score) if d.score else None,
-            'stake': float(d.stake) if d.stake else None,
-            'timestamp': d.timestamp.isoformat(),
-            'metadata': json.loads(d.metadata) if d.metadata else {}
-        } for d in decisions])
+    opportunities = repo.get_top_opportunities(limit=limit, min_score=min_score)
+    return jsonify({
+        "status": "success",
+        "timestamp": datetime.now().isoformat(),
+        "count": len(opportunities),
+        "data": opportunities
+    })
+
+@app.route('/api/events/<event_id>/snapshots')
+def get_event_snapshots(event_id):
+    """Snapshots por evento (optimizado con índice compuesto)"""
+    snapshots = repo.get_snapshots_by_event(event_id)
+    return jsonify({
+        "status": "success",
+        "event_id": event_id,
+        "count": len(snapshots),
+        "data": [
+            {
+                "market_type": s.market_type,
+                "bookmaker": s.bookmaker,
+                "odds": s.odds_data,
+                "timestamp": s.timestamp.isoformat()
+            }
+            for s in snapshots
+        ]
+    })
+
+@app.route('/api/events/<event_id>/decisions')
+def get_event_decisions(event_id):
+    """Decisiones por evento (optimizado con índice compuesto)"""
+    limit = request.args.get('limit', 20, type=int)
+    decisions = repo.get_decisions_by_event(event_id, limit=limit)
+    return jsonify({
+        "status": "success",
+        "event_id": event_id,
+        "count": len(decisions),
+        "data": [
+            {
+                "strategy": d.strategy,
+                "score": d.opportunity_score,
+                "data": d.opportunity_data,
+                "executed": d.executed,
+                "timestamp": d.timestamp.isoformat()
+            }
+            for d in decisions
+        ]
+    })
+
+@app.route('/api/stats')
+def get_stats():
+    """Estadísticas de la base de datos"""
+    stats = repo.get_db_stats()
+    stats["timestamp"] = datetime.now().isoformat()
+    return jsonify(stats)
+
+@app.route('/api/health')
+def health_check():
+    """Health check para monitoreo"""
+    db_stats = get_db().get_connection_stats()
+    return jsonify({
+        "status": "healthy",
+        "version": config.get('version', '0.3.0'),
+        "database": db_stats,
+        "timestamp": datetime.now().isoformat()
+    })
+
+# === INICIALIZACIÓN ===
+
+if __name__ == '__main__':
+    # Configurar logging
+    logging.basicConfig(level=logging.INFO)
     
-    @app.route('/api/status')
-    def get_status():
-        """API: Estado del sistema."""
-        config = app.config['CONFIG']
-        repository = app.config['REPOSITORY']
-        
-        total_snapshots = repository.count_snapshots()
-        total_decisions = repository.count_decisions()
-        
-        return jsonify({
-            'version': config.get('version', '0.2.0'),
-            'status': 'running',
-            'total_snapshots': total_snapshots,
-            'total_decisions': total_decisions,
-            'bankroll': config.get('bankroll', {}).get('initial', 1000.0),
-            'currency': config.get('bankroll', {}).get('currency', 'EUR'),
-            'connector_type': config.get('connector', {}).get('type', 'csv')
-        })
+    # Inicializar app
+    init_app()
     
-    @app.route('/api/event/<event_id>')
-    def get_event_detail(event_id: str):
-        """API: Detalle de un evento específico."""
-        repository = app.config['REPOSITORY']
-        
-        snapshots = repository.get_snapshots_by_event(event_id)
-        decisions = repository.get_decisions_by_event(event_id)
-        
-        if not snapshots:
-            return jsonify({'error': 'Evento no encontrado'}), 404
-        
-        return jsonify({
-            'event_id': event_id,
-            'event_name': snapshots[0].event_name if snapshots else 'Unknown',
-            'snapshots': [{
-                'source': s.source,
-                'timestamp': s.timestamp.isoformat(),
-                'odds': {k: float(v) for k, v in s.odds.items()}
-            } for s in snapshots],
-            'decisions': [{
-                'strategy': d.strategy,
-                'accepted': d.accepted,
-                'score': float(d.score) if d.score else None,
-                'timestamp': d.timestamp.isoformat()
-            } for d in decisions]
-        })
+    # Obtener configuración
+    host = config.get('web', {}).get('host', '0.0.0.0')
+    port = config.get('web', {}).get('port', 5000)
+    debug = config.get('web', {}).get('debug', True)
+    
+    logger.info(f"Iniciando dashboard en http://{host}:{port}")
+    app.run(host=host, port=port, debug=debug)

@@ -1,128 +1,371 @@
 """
-QuantBet - Repositorio de Persistencia (QB-005)
-Funciones para guardar y recuperar entidades del dominio.
+src/storage/repository.py
+CRUD optimizado para snapshots y decisiones
 """
-import json
-import sqlite3
-from typing import List, Optional
-from datetime import datetime, timezone
 
-# Importamos las entidades del dominio
-from src.domain.entities import (
-    Snapshot, Decision, Bookmaker, Sport, Competition, 
-    Event, Market, Outcome, Participant
-)
-from src.storage.database import DatabaseManager
+import json
+import logging
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+from src.storage.database import get_db
+from src.domain.entities import Snapshot, Opportunity, Decision
+
+logger = logging.getLogger(__name__)
 
 class Repository:
-    """
-    Repositorio genérico para operaciones CRUD.
-    Principio: Solo INSERT para Snapshots y Decisions (Inmutabilidad Histórica).
-    """
+    """Repositorio optimizado con consultas eficientes"""
     
-    def __init__(self, db_manager: DatabaseManager):
-        self._db = db_manager
+    def __init__(self, db_path: str = "quantbet.db"):
+        self.db = get_db(db_path)
     
-    def _get_conn(self) -> sqlite3.Connection:
-        return self._db.get_connection()
+    # === SNAPSHOTS ===
     
-    # --- Operaciones de Escritura (Solo INSERT) ---
-    
-    def save_sport(self, sport: Sport):
-        """Guarda un deporte si no existe."""
-        with self._get_conn() as conn:
-            conn.execute(
-                "INSERT OR IGNORE INTO sports (id, name, type) VALUES (?, ?, ?)",
-                (sport.id, sport.name, sport.type.value)
-            )
-    
-    def save_competition(self, competition: Competition):
-        """Guarda una competición y su deporte asociado."""
-        # Primero guardamos el deporte para mantener integridad referencial
-        self.save_sport(competition.sport)
-        with self._get_conn() as conn:
-            conn.execute(
-                "INSERT OR IGNORE INTO competitions (id, name, sport_id) VALUES (?, ?, ?)",
-                (competition.id, competition.name, competition.sport.id)
-            )
-    
-    def save_event(self, event: Event):
-        """Guarda un evento y sus dependencias (competición, participantes)."""
-        self.save_competition(event.competition)
-        with self._get_conn() as conn:
-            home = next((p for p in event.participants if p.type == 'home'), None)
-            away = next((p for p in event.participants if p.type == 'away'), None)
-            conn.execute(
-                "INSERT OR IGNORE INTO events (id, competition_id, start_time_utc, home_participant, away_participant, status) VALUES (?, ?, ?, ?, ?, ?)",
-                (event.id, event.competition.id, event.start_time_utc.isoformat(), 
-                 home.name if home else "N/A", away.name if away else "N/A", event.status.value)
-            )
-    
-    def save_bookmaker(self, bookmaker: Bookmaker):
-        """Guarda un bookmaker si no existe."""
-        with self._get_conn() as conn:
-            conn.execute(
-                "INSERT OR IGNORE INTO bookmakers (id, name, type) VALUES (?, ?, ?)",
-                (bookmaker.id, bookmaker.name, bookmaker.type.value)
-            )
-    
-    def save_market(self, market: Market):
-        """Guarda un mercado si no existe."""
-        with self._get_conn() as conn:
-            conn.execute(
-                "INSERT OR IGNORE INTO markets (id, event_id, type, parameters) VALUES (?, ?, ?, ?)",
-                (market.id, market.event_id, market.type, json.dumps(market.parameters))
-            )
-    
-    def save_outcome(self, outcome: Outcome):
-        """Guarda un outcome si no existe."""
-        with self._get_conn() as conn:
-            conn.execute(
-                "INSERT OR IGNORE INTO outcomes (id, market_id, name) VALUES (?, ?, ?)",
-                (outcome.id, outcome.market_id, outcome.name)
-            )
-    
-    def save_snapshot(self, snapshot: Snapshot) -> bool:
+    def save_snapshot(self, snapshot: Snapshot) -> int:
+        """Guarda un snapshot optimizado con batch insert"""
+        sql = """
+            INSERT INTO snapshots (
+                event_id, event_name, market_type, bookmaker,
+                odds_data, timestamp, source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?);
         """
-        Guarda un snapshot si no existe (evita duplicados exactos).
-        Retorna True si se insertó, False si ya existía.
-        Principio: INMUTABLE. Solo INSERT, nunca UPDATE.
-        """
-        # Guardamos dependencias
-        self.save_bookmaker(snapshot.bookmaker)
-        self.save_market(snapshot.market)
-        for outcome_name in snapshot.odds.keys():
-            # Creamos un outcome temporal para guardarlo si no existe
-            # En un sistema real, los outcomes vendrían del Market
-            pass
+        params = (
+            snapshot.event_id,
+            snapshot.event_name,
+            snapshot.market_type,
+            snapshot.bookmaker,
+            json.dumps(snapshot.odds_data),
+            snapshot.timestamp.isoformat(),
+            snapshot.source
+        )
         
-        with self._get_conn() as conn:
-            try:
-                # Verificamos si ya existe un snapshot idéntico (mismo bookmaker, market, timestamp y odds)
-                odds_json = json.dumps(snapshot.odds, sort_keys=True)
-                cursor = conn.execute(
-                    "SELECT id FROM snapshots WHERE bookmaker_id = ? AND market_id = ? AND timestamp_utc = ? AND odds_json = ?",
-                    (snapshot.bookmaker.id, snapshot.market.id, snapshot.timestamp_utc.isoformat(), odds_json)
-                )
-                if cursor.fetchone():
-                    return False  # Ya existe, no lo duplicamos
-                
-                conn.execute(
-                    "INSERT INTO snapshots (id, bookmaker_id, market_id, timestamp_utc, odds_json, status) VALUES (?, ?, ?, ?, ?, ?)",
-                    (snapshot.id, snapshot.bookmaker.id, snapshot.market.id, 
-                     snapshot.timestamp_utc.isoformat(), odds_json, 'ACTIVE')
-                )
-                return True
-            except sqlite3.IntegrityError:
-                return False  # Violación de restricción (probablemente duplicado)
+        cursor = self.db.execute(sql, params)
+        return cursor.lastrowid
     
-    def save_decision(self, decision: Decision):
-        """Guarda una decisión. Principio: INMUTABLE."""
-        with self._get_conn() as conn:
-            conn.execute(
-                "INSERT INTO decisions (id, strategy, opportunity_score, snapshot_ids_json, recommended_stake_total, expected_roi, details_json, created_at_utc, ttl_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (decision.id, decision.strategy, decision.opportunity_score,
-                 json.dumps(decision.snapshot_ids), decision.recommended_stake_total,
-                 decision.expected_roi, json.dumps(decision.details),
-                 decision.created_at_utc.isoformat(), decision.ttl_seconds)
+    def save_snapshots_batch(self, snapshots: List[Snapshot]) -> int:
+        """Guarda múltiples snapshots en un solo INSERT (batch)"""
+        if not snapshots:
+            return 0
+        
+        sql = """
+            INSERT INTO snapshots (
+                event_id, event_name, market_type, bookmaker,
+                odds_data, timestamp, source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?);
+        """
+        params_list = [
+            (
+                s.event_id,
+                s.event_name,
+                s.market_type,
+                s.bookmaker,
+                json.dumps(s.odds_data),
+                s.timestamp.isoformat(),
+                s.source
             )
+            for s in snapshots
+        ]
+        
+        self.db.executemany(sql, params_list)
+        return len(params_list)
+    
+    def get_latest_snapshots(self, limit: int = 100) -> List[Snapshot]:
+        """Obtiene los últimos snapshots (optimizado con índice por timestamp)"""
+        sql = """
+            SELECT id, event_id, event_name, market_type, bookmaker,
+                   odds_data, timestamp, source
+            FROM snapshots
+            ORDER BY timestamp DESC
+            LIMIT ?;
+        """
+        cursor = self.db.execute(sql, (limit,))
+        rows = cursor.fetchall()
+        
+        return [
+            Snapshot(
+                event_id=row['event_id'],
+                event_name=row['event_name'],
+                market_type=row['market_type'],
+                bookmaker=row['bookmaker'],
+                odds_data=json.loads(row['odds_data']),
+                timestamp=datetime.fromisoformat(row['timestamp']),
+                source=row['source']
+            )
+            for row in rows
+        ]
+    
+    def get_snapshots_by_event(self, event_id: str) -> List[Snapshot]:
+        """Obtiene snapshots por evento (optimizado con índice compuesto)"""
+        sql = """
+            SELECT id, event_id, event_name, market_type, bookmaker,
+                   odds_data, timestamp, source
+            FROM snapshots
+            WHERE event_id = ?
+            ORDER BY timestamp DESC;
+        """
+        cursor = self.db.execute(sql, (event_id,))
+        rows = cursor.fetchall()
+        
+        return [
+            Snapshot(
+                event_id=row['event_id'],
+                event_name=row['event_name'],
+                market_type=row['market_type'],
+                bookmaker=row['bookmaker'],
+                odds_data=json.loads(row['odds_data']),
+                timestamp=datetime.fromisoformat(row['timestamp']),
+                source=row['source']
+            )
+            for row in rows
+        ]
+    
+    def get_latest_snapshot_by_event_market(self, event_id: str, market_type: str) -> Optional[Snapshot]:
+        """Obtiene el snapshot más reciente para un evento y mercado específico"""
+        sql = """
+            SELECT id, event_id, event_name, market_type, bookmaker,
+                   odds_data, timestamp, source
+            FROM snapshots
+            WHERE event_id = ? AND market_type = ?
+            ORDER BY timestamp DESC
+            LIMIT 1;
+        """
+        cursor = self.db.execute(sql, (event_id, market_type))
+        row = cursor.fetchone()
+        
+        if not row:
+            return None
+        
+        return Snapshot(
+            event_id=row['event_id'],
+            event_name=row['event_name'],
+            market_type=row['market_type'],
+            bookmaker=row['bookmaker'],
+            odds_data=json.loads(row['odds_data']),
+            timestamp=datetime.fromisoformat(row['timestamp']),
+            source=row['source']
+        )
+    
+    # === DECISIONES ===
+    
+    def save_decision(self, decision: Decision) -> int:
+        """Guarda una decisión"""
+        sql = """
+            INSERT INTO decisions (
+                event_id, strategy, opportunity_data, decision_data,
+                opportunity_score, timestamp, executed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?);
+        """
+        params = (
+            decision.event_id,
+            decision.strategy,
+            json.dumps(decision.opportunity_data),
+            json.dumps(decision.decision_data),
+            decision.opportunity_score,
+            decision.timestamp.isoformat(),
+            decision.executed
+        )
+        
+        cursor = self.db.execute(sql, params)
+        return cursor.lastrowid
+    
+    def save_decisions_batch(self, decisions: List[Decision]) -> int:
+        """Guarda múltiples decisiones en batch"""
+        if not decisions:
+            return 0
+        
+        sql = """
+            INSERT INTO decisions (
+                event_id, strategy, opportunity_data, decision_data,
+                opportunity_score, timestamp, executed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?);
+        """
+        params_list = [
+            (
+                d.event_id,
+                d.strategy,
+                json.dumps(d.opportunity_data),
+                json.dumps(d.decision_data),
+                d.opportunity_score,
+                d.timestamp.isoformat(),
+                d.executed
+            )
+            for d in decisions
+        ]
+        
+        self.db.executemany(sql, params_list)
+        return len(params_list)
+    
+    def get_decisions_by_event(self, event_id: str, limit: int = 50) -> List[Decision]:
+        """Obtiene decisiones por evento (optimizado con índice compuesto)"""
+        sql = """
+            SELECT id, event_id, strategy, opportunity_data, decision_data,
+                   opportunity_score, timestamp, executed
+            FROM decisions
+            WHERE event_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?;
+        """
+        cursor = self.db.execute(sql, (event_id, limit))
+        rows = cursor.fetchall()
+        
+        return [
+            Decision(
+                event_id=row['event_id'],
+                strategy=row['strategy'],
+                opportunity_data=json.loads(row['opportunity_data']),
+                decision_data=json.loads(row['decision_data']),
+                opportunity_score=row['opportunity_score'],
+                timestamp=datetime.fromisoformat(row['timestamp']),
+                executed=bool(row['executed'])
+            )
+            for row in rows
+        ]
+    
+    def get_top_opportunities(self, limit: int = 20, min_score: float = 70.0) -> List[Dict[str, Any]]:
+        """Obtiene las mejores oportunidades (optimizado con índice)"""
+        sql = """
+            SELECT event_id, strategy, opportunity_score, 
+                   opportunity_data, timestamp
+            FROM decisions
+            WHERE opportunity_score >= ?
+            ORDER BY opportunity_score DESC
+            LIMIT ?;
+        """
+        cursor = self.db.execute(sql, (min_score, limit))
+        rows = cursor.fetchall()
+        
+        return [
+            {
+                "event_id": row['event_id'],
+                "strategy": row['strategy'],
+                "score": row['opportunity_score'],
+                "data": json.loads(row['opportunity_data']),
+                "timestamp": row['timestamp']
+            }
+            for row in rows
+        ]
+    
+    # === MARKET SUMMARY (Vista Materializada) ===
+    
+    def update_market_summary(self, event_id: str, market_type: str, 
+                              best_opportunity: float, total_opportunities: int,
+                              avg_score: float):
+        """Actualiza o inserta el resumen de mercado para dashboard rápido"""
+        sql = """
+            INSERT INTO market_summary (
+                event_id, market_type, best_opportunity,
+                total_opportunities, avg_score, timestamp
+            ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(event_id, market_type) DO UPDATE SET
+                best_opportunity = excluded.best_opportunity,
+                total_opportunities = excluded.total_opportunities,
+                avg_score = excluded.avg_score,
+                timestamp = CURRENT_TIMESTAMP;
+        """
+        self.db.execute(sql, (event_id, market_type, best_opportunity, 
+                              total_opportunities, avg_score))
+    
+    def get_market_summary(self, limit: int = 50, min_opportunities: int = 1) -> List[Dict[str, Any]]:
+        """Obtiene el resumen de mercado para el dashboard (rápido)"""
+        sql = """
+            SELECT event_id, market_type, best_opportunity,
+                   total_opportunities, avg_score, timestamp
+            FROM market_summary
+            WHERE total_opportunities >= ?
+            ORDER BY best_opportunity DESC, avg_score DESC
+            LIMIT ?;
+        """
+        cursor = self.db.execute(sql, (min_opportunities, limit))
+        rows = cursor.fetchall()
+        
+        return [
+            {
+                "event_id": row['event_id'],
+                "market_type": row['market_type'],
+                "best_opportunity": row['best_opportunity'],
+                "total_opportunities": row['total_opportunities'],
+                "avg_score": row['avg_score'],
+                "timestamp": row['timestamp']
+            }
+            for row in rows
+        ]
+    
+    # === ESTADÍSTICAS Y MANTENIMIENTO ===
+    
+    def get_db_stats(self) -> Dict[str, Any]:
+        """Obtiene estadísticas de la base de datos"""
+        stats = {
+            "snapshots": {},
+            "decisions": {},
+            "summary": {}
+        }
+        
+        # Conteo de snapshots
+        cursor = self.db.execute("SELECT COUNT(*) FROM snapshots;")
+        stats["snapshots"]["total"] = cursor.fetchone()[0]
+        
+        # Conteo por mercado
+        cursor = self.db.execute("""
+            SELECT market_type, COUNT(*) as count
+            FROM snapshots
+            GROUP BY market_type;
+        """)
+        stats["snapshots"]["by_market"] = {row['market_type']: row['count'] for row in cursor.fetchall()}
+        
+        # Último snapshot
+        cursor = self.db.execute("""
+            SELECT MAX(timestamp) as last_timestamp
+            FROM snapshots;
+        """)
+        row = cursor.fetchone()
+        stats["snapshots"]["last_timestamp"] = row['last_timestamp'] if row else None
+        
+        # Conteo de decisiones
+        cursor = self.db.execute("SELECT COUNT(*) FROM decisions;")
+        stats["decisions"]["total"] = cursor.fetchone()[0]
+        
+        # Conteo por estrategia
+        cursor = self.db.execute("""
+            SELECT strategy, COUNT(*) as count
+            FROM decisions
+            GROUP BY strategy;
+        """)
+        stats["decisions"]["by_strategy"] = {row['strategy']: row['count'] for row in cursor.fetchall()}
+        
+        # Score promedio
+        cursor = self.db.execute("SELECT AVG(opportunity_score) FROM decisions;")
+        stats["decisions"]["avg_score"] = round(cursor.fetchone()[0] or 0, 2)
+        
+        # Resumen de mercado
+        cursor = self.db.execute("SELECT COUNT(*) FROM market_summary;")
+        stats["summary"]["total_markets"] = cursor.fetchone()[0]
+        
+        return stats
+    
+    def cleanup_old_data(self, days_to_keep: int = 30):
+        """Limpia datos antiguos para mantener rendimiento"""
+        # Eliminar snapshots antiguos
+        sql_snapshots = """
+            DELETE FROM snapshots
+            WHERE timestamp < datetime('now', ?);
+        """
+        days_param = f"-{days_to_keep} days"
+        self.db.execute(sql_snapshots, (days_param,))
+        
+        # Eliminar decisiones antiguas (conservar las de mayor score)
+        sql_decisions = """
+            DELETE FROM decisions
+            WHERE timestamp < datetime('now', ?)
+            AND opportunity_score < 50;
+        """
+        self.db.execute(sql_decisions, (days_param,))
+        
+        # Limpiar summary antiguo
+        sql_summary = """
+            DELETE FROM market_summary
+            WHERE timestamp < datetime('now', ?);
+        """
+        self.db.execute(sql_summary, (days_param,))
+        
+        # Vacuum para compactar BD
+        self.db.execute("VACUUM;")
+        logger.info(f"Limpieza completada: datos anteriores a {days_to_keep} días eliminados")

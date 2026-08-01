@@ -31,7 +31,7 @@ jobs:
         pytest tests/test_stress.py -v --run-slow --timeout=300
     
     - name: Guardar resultados de estrés
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: stress-test-results
         path: |

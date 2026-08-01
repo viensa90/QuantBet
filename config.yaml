@@ -1,5 +1,5 @@
 # QuantBet - Configuración Centralizada
-# Versión: 0.3.1 (Optimización de rendimiento + Notificaciones)
+# Versión: 0.3.1 (Soporte para Tenis)
 
 version: "0.3.1"
 
@@ -9,15 +9,20 @@ strategies:
   value_betting: true
   dutching: true
 
-# Mercados soportados
+# Mercados soportados (incluyendo Tenis)
 markets:
   enabled:
     - "1X2"
     - "Over/Under"
     - "Asian Handicap"
     - "Double Chance"
+    - "Tennis Winner"
+    - "Tennis Set Handicap"
+    - "Tennis Total Games"
   over_under_lines: [0.5, 1.5, 2.5, 3.5]
   asian_handicaps: [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0]
+  tennis_set_handicaps: [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]
+  tennis_total_games_lines: [18.5, 19.5, 20.5, 21.5, 22.5, 23.5, 24.5]
 
 # Umbrales y parámetros
 thresholds:
@@ -65,7 +70,7 @@ web:
   debug: true
   refresh_seconds: 30
 
-# Notificaciones (NUEVO v0.3.1)
+# Notificaciones
 notifications:
   enabled: true
   min_score: 70.0
@@ -82,7 +87,6 @@ email:
   from_email: "tu_email@gmail.com"
   to_emails:
     - "destinatario1@gmail.com"
-    - "destinatario2@gmail.com"
   min_score: 70.0
 
 # Telegram Bot
@@ -91,7 +95,6 @@ telegram:
   bot_token: "TU_BOT_TOKEN"
   chat_ids:
     - "ID_CHAT_1"
-    - "ID_CHAT_2"
   min_score: 70.0
 
 # Logging

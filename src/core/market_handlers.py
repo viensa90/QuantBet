@@ -1,292 +1,378 @@
 """
-Handlers específicos para cada tipo de mercado.
-Cada handler sabe cómo extraer oportunidades de su mercado.
+src/core/market_handlers.py
+Handlers específicos por mercado (Strategy Pattern)
+Versión: 0.3.1 (Soporte para Tenis)
 """
 
+import logging
 from abc import ABC, abstractmethod
-from decimal import Decimal
-from typing import List, Dict, Optional, Tuple, Any
-from itertools import combinations
-
+from typing import List, Dict, Any, Optional, Tuple
 from src.domain.entities import Snapshot, Opportunity, MarketType
 
+logger = logging.getLogger(__name__)
 
-class MarketHandler(ABC):
-    """Base para handlers de mercado."""
+class BaseMarketHandler(ABC):
+    """Clase base para handlers de mercado"""
     
     @abstractmethod
-    def detect_opportunities(self, snapshots: List[Snapshot]) -> List[Opportunity]:
-        """Detecta oportunidades de arbitraje en este mercado."""
+    def get_market_type(self) -> str:
+        """Retorna el tipo de mercado"""
         pass
     
     @abstractmethod
-    def get_required_outcomes(self) -> List[str]:
-        """Retorna los resultados requeridos para este mercado."""
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
+        """Encuentra oportunidades de arbitraje en un snapshot"""
         pass
-
-
-class MarketHandler1X2(MarketHandler):
-    """Handler para mercado 1X2."""
     
-    def get_required_outcomes(self) -> List[str]:
-        return ["Local", "Empate", "Visitante"]
+    @abstractmethod
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        """Calcula odds justas para value betting"""
+        pass
     
-    def detect_opportunities(self, snapshots: List[Snapshot]) -> List[Opportunity]:
+    def validate_odds(self, odds_data: Dict[str, float]) -> bool:
+        """Valida que los odds sean consistentes"""
+        if not odds_data:
+            return False
+        for odd in odds_data.values():
+            if odd <= 1.0:
+                return False
+        return True
+
+class Handler1X2(BaseMarketHandler):
+    """Handler para mercado 1X2 (Fútbol, Tenis, etc.)"""
+    
+    def get_market_type(self) -> str:
+        return "1X2"
+    
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
         opportunities = []
         
-        # Agrupar por evento
-        events = {}
-        for s in snapshots:
-            if s.market_type != MarketType.MERCADO_1X2:
-                continue
-            if s.event_id not in events:
-                events[s.event_id] = []
-            events[s.event_id].append(s)
+        if not self.validate_odds(snapshot.odds_data):
+            return opportunities
         
-        # Para cada evento, buscar mejores cuotas por resultado
-        for event_id, event_snapshots in events.items():
-            best_odds = {}
-            sources_used = {}
+        # Calcular overround
+        overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        
+        # Si overround < 1, hay arbitraje
+        if overround < 1.0:
+            profit_percent = (1.0 / overround - 1.0) * 100
             
-            for outcome in self.get_required_outcomes():
-                best_odds[outcome] = Decimal('0')
-                sources_used[outcome] = None
-                
-                for snapshot in event_snapshots:
-                    if outcome in snapshot.odds:
-                        odds = snapshot.odds[outcome]
-                        if odds > best_odds[outcome]:
-                            best_odds[outcome] = odds
-                            sources_used[outcome] = snapshot.source
+            # Calcular stakes para arbitraje
+            stakes = {}
+            for outcome, odd in snapshot.odds_data.items():
+                stakes[outcome] = 1.0 / odd / overround
             
-            # Verificar que tenemos todos los outcomes
-            if all(odds > 0 for odds in best_odds.values()):
-                # Calcular arbitraje
-                total_inv = sum(Decimal(1) / odds for odds in best_odds.values())
-                arbitrage_percent = float((Decimal(1) / total_inv - 1) * 100)
-                
-                if arbitrage_percent > 0:
-                    stakes = {outcome: Decimal(1) / odds for outcome, odds in best_odds.items()}
-                    total_stake = sum(stakes.values())
-                    
-                    opportunity = Opportunity(
-                        event_id=event_id,
-                        event_name=event_snapshots[0].event_name if event_snapshots else event_id,
-                        source="MULTI_SOURCE",
-                        market_type=MarketType.MERCADO_1X2,
-                        arbitrage_percent=arbitrage_percent,
-                        total_stake=total_stake,
-                        stakes=stakes,
-                        odds_used=best_odds,
-                        timestamp=event_snapshots[0].timestamp
-                    )
-                    opportunities.append(opportunity)
+            opportunity = Opportunity(
+                event_id=snapshot.event_id,
+                market_type=self.get_market_type(),
+                profit_percent=profit_percent,
+                odds=snapshot.odds_data,
+                stakes=stakes,
+                source=snapshot.source,
+                timestamp=snapshot.timestamp
+            )
+            opportunities.append(opportunity)
         
         return opportunities
-
-
-class MarketHandlerOverUnder(MarketHandler):
-    """Handler para mercado Over/Under."""
     
-    def get_required_outcomes(self) -> List[str]:
-        return ["Over", "Under"]
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        """Calcula odds justas (inverso de probabilidades)"""
+        if not self.validate_odds(snapshot.odds_data):
+            return None
+        
+        # Usar modelo de probabilidad (implementación externa)
+        # Por ahora retorna None, será manejado por el modelo externo
+        return None
+
+class HandlerOverUnder(BaseMarketHandler):
+    """Handler para mercado Over/Under"""
     
-    def detect_opportunities(self, snapshots: List[Snapshot]) -> List[Opportunity]:
+    def get_market_type(self) -> str:
+        return "Over/Under"
+    
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
         opportunities = []
         
-        # Agrupar por evento y línea
-        events_lines = {}
-        for s in snapshots:
-            if s.market_type != MarketType.OVER_UNDER:
-                continue
-            
-            line = s.metadata.get('line', 2.5)  # Línea por defecto 2.5
-            key = (s.event_id, line)
-            
-            if key not in events_lines:
-                events_lines[key] = []
-            events_lines[key].append(s)
+        if not self.validate_odds(snapshot.odds_data):
+            return opportunities
         
-        # Para cada evento-línea, buscar mejores cuotas
-        for (event_id, line), event_snapshots in events_lines.items():
-            best_odds = {}
-            sources_used = {}
+        # Calcular overround
+        overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        
+        if overround < 1.0:
+            profit_percent = (1.0 / overround - 1.0) * 100
             
-            for outcome in self.get_required_outcomes():
-                best_odds[outcome] = Decimal('0')
-                sources_used[outcome] = None
-                
-                for snapshot in event_snapshots:
-                    if outcome in snapshot.odds:
-                        odds = snapshot.odds[outcome]
-                        if odds > best_odds[outcome]:
-                            best_odds[outcome] = odds
-                            sources_used[outcome] = snapshot.source
+            stakes = {}
+            for outcome, odd in snapshot.odds_data.items():
+                stakes[outcome] = 1.0 / odd / overround
             
-            if all(odds > 0 for odds in best_odds.values()):
-                total_inv = sum(Decimal(1) / odds for odds in best_odds.values())
-                arbitrage_percent = float((Decimal(1) / total_inv - 1) * 100)
-                
-                if arbitrage_percent > 0:
-                    stakes = {outcome: Decimal(1) / odds for outcome, odds in best_odds.items()}
-                    total_stake = sum(stakes.values())
-                    
-                    opportunity = Opportunity(
-                        event_id=event_id,
-                        event_name=event_snapshots[0].event_name if event_snapshots else event_id,
-                        source="MULTI_SOURCE",
-                        market_type=MarketType.OVER_UNDER,
-                        arbitrage_percent=arbitrage_percent,
-                        total_stake=total_stake,
-                        stakes=stakes,
-                        odds_used=best_odds,
-                        timestamp=event_snapshots[0].timestamp,
-                        metadata={"line": line}
-                    )
-                    opportunities.append(opportunity)
+            opportunity = Opportunity(
+                event_id=snapshot.event_id,
+                market_type=self.get_market_type(),
+                profit_percent=profit_percent,
+                odds=snapshot.odds_data,
+                stakes=stakes,
+                source=snapshot.source,
+                timestamp=snapshot.timestamp
+            )
+            opportunities.append(opportunity)
         
         return opportunities
-
-
-class MarketHandlerAsianHandicap(MarketHandler):
-    """Handler para mercado Asian Handicap."""
     
-    def get_required_outcomes(self) -> List[str]:
-        return ["Local", "Visitante"]
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        return None
+
+class HandlerAsianHandicap(BaseMarketHandler):
+    """Handler para Asian Handicap"""
     
-    def detect_opportunities(self, snapshots: List[Snapshot]) -> List[Opportunity]:
+    def get_market_type(self) -> str:
+        return "Asian Handicap"
+    
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
         opportunities = []
         
-        # Agrupar por evento y línea de handicap
-        events_lines = {}
-        for s in snapshots:
-            if s.market_type != MarketType.ASIAN_HANDICAP:
-                continue
-            
-            line = s.metadata.get('handicap', 0.0)  # Handicap por defecto 0
-            key = (s.event_id, line)
-            
-            if key not in events_lines:
-                events_lines[key] = []
-            events_lines[key].append(s)
+        if not self.validate_odds(snapshot.odds_data):
+            return opportunities
         
-        # Para cada evento-línea, buscar mejores cuotas
-        for (event_id, handicap), event_snapshots in events_lines.items():
-            best_odds = {}
-            sources_used = {}
+        overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        
+        if overround < 1.0:
+            profit_percent = (1.0 / overround - 1.0) * 100
             
-            for outcome in self.get_required_outcomes():
-                best_odds[outcome] = Decimal('0')
-                sources_used[outcome] = None
-                
-                for snapshot in event_snapshots:
-                    if outcome in snapshot.odds:
-                        odds = snapshot.odds[outcome]
-                        if odds > best_odds[outcome]:
-                            best_odds[outcome] = odds
-                            sources_used[outcome] = snapshot.source
+            stakes = {}
+            for outcome, odd in snapshot.odds_data.items():
+                stakes[outcome] = 1.0 / odd / overround
             
-            if all(odds > 0 for odds in best_odds.values()):
-                total_inv = sum(Decimal(1) / odds for odds in best_odds.values())
-                arbitrage_percent = float((Decimal(1) / total_inv - 1) * 100)
-                
-                if arbitrage_percent > 0:
-                    stakes = {outcome: Decimal(1) / odds for outcome, odds in best_odds.items()}
-                    total_stake = sum(stakes.values())
-                    
-                    opportunity = Opportunity(
-                        event_id=event_id,
-                        event_name=event_snapshots[0].event_name if event_snapshots else event_id,
-                        source="MULTI_SOURCE",
-                        market_type=MarketType.ASIAN_HANDICAP,
-                        arbitrage_percent=arbitrage_percent,
-                        total_stake=total_stake,
-                        stakes=stakes,
-                        odds_used=best_odds,
-                        timestamp=event_snapshots[0].timestamp,
-                        metadata={"handicap": handicap}
-                    )
-                    opportunities.append(opportunity)
+            opportunity = Opportunity(
+                event_id=snapshot.event_id,
+                market_type=self.get_market_type(),
+                profit_percent=profit_percent,
+                odds=snapshot.odds_data,
+                stakes=stakes,
+                source=snapshot.source,
+                timestamp=snapshot.timestamp
+            )
+            opportunities.append(opportunity)
         
         return opportunities
-
-
-class MarketHandlerDoubleChance(MarketHandler):
-    """Handler para mercado Doble Oportunidad."""
     
-    def get_required_outcomes(self) -> List[str]:
-        return ["1X", "X2", "12"]  # Local o Empate, Empate o Visitante, Local o Visitante
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        return None
+
+class HandlerDoubleChance(BaseMarketHandler):
+    """Handler para Double Chance"""
     
-    def detect_opportunities(self, snapshots: List[Snapshot]) -> List[Opportunity]:
+    def get_market_type(self) -> str:
+        return "Double Chance"
+    
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
         opportunities = []
         
-        # Agrupar por evento
-        events = {}
-        for s in snapshots:
-            if s.market_type != MarketType.DOUBLE_CHANCE:
-                continue
-            if s.event_id not in events:
-                events[s.event_id] = []
-            events[s.event_id].append(s)
+        if not self.validate_odds(snapshot.odds_data):
+            return opportunities
         
-        for event_id, event_snapshots in events.items():
-            best_odds = {}
-            sources_used = {}
+        overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        
+        if overround < 1.0:
+            profit_percent = (1.0 / overround - 1.0) * 100
             
-            for outcome in self.get_required_outcomes():
-                best_odds[outcome] = Decimal('0')
-                sources_used[outcome] = None
-                
-                for snapshot in event_snapshots:
-                    if outcome in snapshot.odds:
-                        odds = snapshot.odds[outcome]
-                        if odds > best_odds[outcome]:
-                            best_odds[outcome] = odds
-                            sources_used[outcome] = snapshot.source
+            stakes = {}
+            for outcome, odd in snapshot.odds_data.items():
+                stakes[outcome] = 1.0 / odd / overround
             
-            if all(odds > 0 for odds in best_odds.values()):
-                total_inv = sum(Decimal(1) / odds for odds in best_odds.values())
-                arbitrage_percent = float((Decimal(1) / total_inv - 1) * 100)
-                
-                if arbitrage_percent > 0:
-                    stakes = {outcome: Decimal(1) / odds for outcome, odds in best_odds.items()}
-                    total_stake = sum(stakes.values())
-                    
-                    opportunity = Opportunity(
-                        event_id=event_id,
-                        event_name=event_snapshots[0].event_name if event_snapshots else event_id,
-                        source="MULTI_SOURCE",
-                        market_type=MarketType.DOUBLE_CHANCE,
-                        arbitrage_percent=arbitrage_percent,
-                        total_stake=total_stake,
-                        stakes=stakes,
-                        odds_used=best_odds,
-                        timestamp=event_snapshots[0].timestamp
-                    )
-                    opportunities.append(opportunity)
+            opportunity = Opportunity(
+                event_id=snapshot.event_id,
+                market_type=self.get_market_type(),
+                profit_percent=profit_percent,
+                odds=snapshot.odds_data,
+                stakes=stakes,
+                source=snapshot.source,
+                timestamp=snapshot.timestamp
+            )
+            opportunities.append(opportunity)
         
         return opportunities
+    
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        return None
 
+# === NUEVOS HANDLERS PARA TENIS ===
+
+class TennisMatchWinner(BaseMarketHandler):
+    """
+    Handler para Winner del partido (Tenis)
+    Mercado: 1X2 pero con 2 resultados (Jugador1, Jugador2)
+    """
+    
+    def get_market_type(self) -> str:
+        return "Tennis Winner"
+    
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
+        opportunities = []
+        
+        if not self.validate_odds(snapshot.odds_data):
+            return opportunities
+        
+        # Tenis tiene 2 resultados principales
+        if len(snapshot.odds_data) < 2:
+            return opportunities
+        
+        # Calcular overround
+        overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        
+        if overround < 1.0:
+            profit_percent = (1.0 / overround - 1.0) * 100
+            
+            stakes = {}
+            for outcome, odd in snapshot.odds_data.items():
+                stakes[outcome] = 1.0 / odd / overround
+            
+            opportunity = Opportunity(
+                event_id=snapshot.event_id,
+                market_type=self.get_market_type(),
+                profit_percent=profit_percent,
+                odds=snapshot.odds_data,
+                stakes=stakes,
+                source=snapshot.source,
+                timestamp=snapshot.timestamp
+            )
+            opportunities.append(opportunity)
+        
+        return opportunities
+    
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        """Calcula odds justas para tenis (2 resultados)"""
+        if not self.validate_odds(snapshot.odds_data):
+            return None
+        
+        # Estimación simple: basado en odds implícitos
+        total_implied = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        if total_implied <= 0:
+            return None
+        
+        fair_odds = {}
+        for outcome, odd in snapshot.odds_data.items():
+            # Ajustar para eliminar margen del bookmaker
+            fair_prob = (1.0 / odd) / total_implied
+            fair_odds[outcome] = 1.0 / fair_prob
+        
+        return fair_odds
+
+class TennisSetHandicap(BaseMarketHandler):
+    """
+    Handler para Handicap en Sets (Tenis)
+    Mercado: Handicap en sets (ej: -1.5, +1.5)
+    """
+    
+    def get_market_type(self) -> str:
+        return "Tennis Set Handicap"
+    
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
+        opportunities = []
+        
+        if not self.validate_odds(snapshot.odds_data):
+            return opportunities
+        
+        if len(snapshot.odds_data) < 2:
+            return opportunities
+        
+        overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        
+        if overround < 1.0:
+            profit_percent = (1.0 / overround - 1.0) * 100
+            
+            stakes = {}
+            for outcome, odd in snapshot.odds_data.items():
+                stakes[outcome] = 1.0 / odd / overround
+            
+            opportunity = Opportunity(
+                event_id=snapshot.event_id,
+                market_type=self.get_market_type(),
+                profit_percent=profit_percent,
+                odds=snapshot.odds_data,
+                stakes=stakes,
+                source=snapshot.source,
+                timestamp=snapshot.timestamp
+            )
+            opportunities.append(opportunity)
+        
+        return opportunities
+    
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        return None
+
+class TennisTotalGames(BaseMarketHandler):
+    """
+    Handler para Total de Games (Tenis)
+    Mercado: Over/Under en games (ej: Over 22.5, Under 22.5)
+    """
+    
+    def get_market_type(self) -> str:
+        return "Tennis Total Games"
+    
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
+        opportunities = []
+        
+        if not self.validate_odds(snapshot.odds_data):
+            return opportunities
+        
+        if len(snapshot.odds_data) < 2:
+            return opportunities
+        
+        overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        
+        if overround < 1.0:
+            profit_percent = (1.0 / overround - 1.0) * 100
+            
+            stakes = {}
+            for outcome, odd in snapshot.odds_data.items():
+                stakes[outcome] = 1.0 / odd / overround
+            
+            opportunity = Opportunity(
+                event_id=snapshot.event_id,
+                market_type=self.get_market_type(),
+                profit_percent=profit_percent,
+                odds=snapshot.odds_data,
+                stakes=stakes,
+                source=snapshot.source,
+                timestamp=snapshot.timestamp
+            )
+            opportunities.append(opportunity)
+        
+        return opportunities
+    
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        return None
 
 class MarketHandlerFactory:
-    """Fábrica de handlers de mercado."""
+    """Fábrica de handlers de mercado"""
     
     _handlers = {
-        MarketType.MERCADO_1X2: MarketHandler1X2,
-        MarketType.OVER_UNDER: MarketHandlerOverUnder,
-        MarketType.ASIAN_HANDICAP: MarketHandlerAsianHandicap,
-        MarketType.DOUBLE_CHANCE: MarketHandlerDoubleChance,
+        "1X2": Handler1X2,
+        "Over/Under": HandlerOverUnder,
+        "Asian Handicap": HandlerAsianHandicap,
+        "Double Chance": HandlerDoubleChance,
+        # Nuevos handlers para Tenis
+        "Tennis Winner": TennisMatchWinner,
+        "Tennis Set Handicap": TennisSetHandicap,
+        "Tennis Total Games": TennisTotalGames,
     }
     
     @classmethod
-    def get_handler(cls, market_type: MarketType) -> MarketHandler:
-        """Retorna el handler para el tipo de mercado."""
+    def get_handler(cls, market_type: str) -> Optional[BaseMarketHandler]:
+        """Retorna el handler para un mercado específico"""
         handler_class = cls._handlers.get(market_type)
-        if not handler_class:
-            raise ValueError(f"No hay handler para {market_type}")
-        return handler_class()
+        if handler_class:
+            return handler_class()
+        return None
     
     @classmethod
-    def get_supported_markets(cls) -> List[MarketType]:
-        """Retorna lista de mercados soportados."""
+    def get_supported_markets(cls) -> List[str]:
+        """Retorna lista de mercados soportados"""
         return list(cls._handlers.keys())
+    
+    @classmethod
+    def register_handler(cls, market_type: str, handler_class):
+        """Registra un nuevo handler (extensible)"""
+        cls._handlers[market_type] = handler_class
+        logger.info(f"Handler registrado: {market_type}")

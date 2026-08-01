@@ -1,0 +1,9 @@
+event_id,event_name,market_type,bookmaker,odds_data,timestamp,source
+tennis_001,Nadal vs Djokovic,Tennis Winner,Bet365,"{""Nadal"":1.85,""Djokovic"":2.10}",2026-07-31T10:00:00,csv
+tennis_001,Nadal vs Djokovic,Tennis Winner,William Hill,"{""Nadal"":1.90,""Djokovic"":2.05}",2026-07-31T10:00:00,csv
+tennis_001,Nadal vs Djokovic,Tennis Set Handicap,Bet365,"{""Nadal -1.5"":2.20,""Djokovic +1.5"":1.75}",2026-07-31T10:00:00,csv
+tennis_001,Nadal vs Djokovic,Tennis Total Games,Bet365,"{""Over 22.5"":1.90,""Under 22.5"":1.95}",2026-07-31T10:00:00,csv
+tennis_002,Federer vs Murray,Tennis Winner,Pinnacle,"{""Federer"":1.65,""Murray"":2.40}",2026-07-31T11:00:00,csv
+tennis_002,Federer vs Murray,Tennis Winner,Bet365,"{""Federer"":1.70,""Murray"":2.30}",2026-07-31T11:00:00,csv
+tennis_003,Alcaraz vs Sinner,Tennis Winner,Betfair,"{""Alcaraz"":1.95,""Sinner"":1.90}",2026-07-31T12:00:00,csv
+tennis_003,Alcaraz vs Sinner,Tennis Winner,Pinnacle,"{""Alcaraz"":1.98,""Sinner"":1.88}",2026-07-31T12:00:00,csv

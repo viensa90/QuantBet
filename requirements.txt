@@ -1,12 +1,30 @@
-# Dependencias base
-pytest>=7.0.0
-pyyaml>=6.0
-playwright>=1.40.0
-Flask>=2.3.0
-Jinja2>=3.1.0
+# QuantBet - Dependencias
+# Versión: 0.3.2
 
-# Dependencias para tests
-pytest-flask>=1.2.0
-pytest-cov>=4.0.0
-pytest-timeout>=2.1.0
+# --- Core ---
+python-dotenv>=1.0.0
+pyyaml>=6.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# --- Base de datos ---
+# SQLite3 (incluido en Python)
+
+# --- Web Dashboard ---
+Flask>=2.3.0
+flask-swagger-ui>=4.11.1  # <-- NUEVO
+
+# --- Conectores ---
+playwright>=1.35.0
+
+# --- Notificaciones ---
+sendgrid>=6.10.0
+python-telegram-bot>=20.0
+
+# --- Tests ---
+pytest>=7.4.0
+pytest-cov>=4.1.0
 pytest-xdist>=3.3.0
+
+# --- Documentación ---
+# No se requiere Sphinx, Swagger cubre la documentación API

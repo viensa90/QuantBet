@@ -1,119 +1,86 @@
 # QuantBet - Configuración Centralizada
-# Versión: 0.3.1 (Soporte para Tenis y Baloncesto)
+# Versión: 0.3.2
 
-version: "0.3.1"
-
-# Estrategias habilitadas
+# --- Estrategias ---
 strategies:
   arbitrage: true
   value_betting: true
   dutching: true
 
-# Mercados soportados (incluyendo Tenis y Baloncesto)
+# --- Mercados ---
 markets:
   enabled:
-    # Mercados base
     - "1X2"
     - "Over/Under"
     - "Asian Handicap"
     - "Double Chance"
-    # Mercados de Tenis
     - "Tennis Winner"
-    - "Tennis Set Handicap"
-    - "Tennis Total Games"
-    # Mercados de Baloncesto (NUEVOS)
+    - "Set Handicap"
+    - "Total Games"
     - "Basketball Moneyline"
-    - "Basketball Spread"
-    - "Basketball Total Points"
-    - "Basketball Quarter Winner"
-  
-  # Líneas configurables por deporte
-  over_under_lines: [0.5, 1.5, 2.5, 3.5]
-  asian_handicaps: [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0]
-  
-  # Líneas de Tenis
-  tennis_set_handicaps: [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]
-  tennis_total_games_lines: [18.5, 19.5, 20.5, 21.5, 22.5, 23.5, 24.5]
-  
-  # Líneas de Baloncesto (NUEVAS)
-  basketball_spreads: [-15.5, -12.5, -10.5, -8.5, -6.5, -4.5, -3.5, -2.5, -1.5, 0.0, 1.5, 2.5, 3.5, 4.5, 6.5, 8.5, 10.5, 12.5, 15.5]
-  basketball_total_lines: [180.5, 190.5, 200.5, 210.5, 215.5, 220.5, 225.5, 230.5, 240.5]
+    - "Point Spread"
+    - "Total Points"
+    - "Quarter Winner"
 
-# Umbrales y parámetros
+# --- Umbrales ---
 thresholds:
   min_profit_percent: 1.5
+  max_arbitrage_risk: 5.0
   min_value_probability: 0.65
-  min_dutching_odds: 2.0
-  max_risk_per_bet: 0.02  # 2% del bankroll
+  min_dutching_events: 2
+  max_dutching_events: 5
 
-# Modelo de probabilidad
+# --- Modelos de Probabilidad ---
 probability_model:
   type: "historical"  # historical | elo | poisson
-  use_team_stats: true
-  elo_default_rating: 1500
-  poisson_goals_avg: 1.5
+  elo_k_factor: 32
+  historical_window: 10
+  poisson_avg_goals: 2.5
 
-# Conectores
-connectors:
-  csv:
-    data_dir: "data/"
-    events_file: "sample_events.csv"
-    team_stats_file: "team_stats.csv"
-  
-  web:
-    provider: "playwright"
-    headless: true
-    timeout: 30000
-    urls:
-      - "https://example.com/odds"
-      - "https://example.com/live"
+# --- Gestión de Banca ---
+bankroll:
+  initial: 1000.0
+  currency: "USD"
+  max_stake_percentage: 2.0
 
-# Base de datos y rendimiento
+# --- Conectores ---
+csv_provider:
+  enabled: true
+  events_file: "data/sample_events.csv"
+  tennis_file: "data/tennis_events.csv"
+  basketball_file: "data/basketball_events.csv"
+
+web_provider:
+  enabled: false
+  url: "https://example.com/odds"
+  selector: ".odds-table"
+  headless: true
+
+# --- Base de Datos ---
 database:
   path: "quantbet.db"
-  pool_size: 5
-  timeout: 10.0
-  cache_size_mb: 20
-  journal_mode: "WAL"
-  synchronous: "NORMAL"
-  cleanup_days: 30
+  wal_mode: true
+  cache_size: 10000
+  sync_mode: "NORMAL"
 
-# Dashboard web
-web:
-  host: "0.0.0.0"
-  port: 5000
-  debug: true
-  refresh_seconds: 30
-
-# Notificaciones
+# --- Notificaciones ---
 notifications:
-  enabled: true
-  min_score: 70.0
-  interval_minutes: 15
-  max_per_interval: 10
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    sender: "quantbet@example.com"
+    recipients:
+      - "user@example.com"
+  
+  telegram:
+    enabled: false
+    bot_token: "TU_BOT_TOKEN"
+    chat_id: "TU_CHAT_ID"
 
-# Email (SMTP)
-email:
-  enabled: false
-  smtp_server: "smtp.gmail.com"
-  smtp_port: 587
-  username: "tu_email@gmail.com"
-  password: "tu_contraseña"
-  from_email: "tu_email@gmail.com"
-  to_emails:
-    - "destinatario1@gmail.com"
-  min_score: 70.0
-
-# Telegram Bot
-telegram:
-  enabled: false
-  bot_token: "TU_BOT_TOKEN"
-  chat_ids:
-    - "ID_CHAT_1"
-  min_score: 70.0
-
-# Logging
-logging:
-  level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  file: "quantbet.log"
+# --- Dashboard Web ---
+web:
+  host: "0.0.0.0"        # Nuevo - Configuración del servidor web
+  port: 5000             # Nuevo - Puerto del dashboard
+  debug: false           # Nuevo - Modo debug
+  swagger_enabled: true  # Nuevo - Activar/desactivar Swagger UI

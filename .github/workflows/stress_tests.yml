@@ -1,0 +1,29 @@
+name: Stress Tests
+
+on:
+  schedule:
+    # Ejecutar una vez al día
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Permitir ejecución manual
+
+jobs:
+  stress-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        playwright install --with-deps chromium
+    
+    - name: Run stress tests
+      run: |
+        pytest tests/test_stress.py -v --run-slow
+      timeout-minutes: 10

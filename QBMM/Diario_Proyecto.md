@@ -48,10 +48,10 @@ Esta verificación es OBLIGATORIA y debe realizarse al inicio de CADA sesión, i
 
 📋 RESUMEN EJECUTIVO
 Proyecto: QuantBet - Sistema de Arbitraje Deportivo Automatizado
-Versión: 0.3.1 (Optimización de Rendimiento)
+Versión: 0.3.1 (Optimización de Rendimiento + CI/CD)
 Repositorio: https://github.com/viensa90/QuantBet
-Última sesión: 15 - 31/07/2026
-Estado: ✅ Sistema optimizado y listo para escalabilidad
+Última sesión: 17 - 31/07/2026
+Estado: ✅ Sistema optimizado, probado con 5,000+ eventos y CI/CD implementado
 
 🎯 PRINCIPIOS DE ARQUITECTURA (INMUTABLES)
 #1 - Conectores solo obtienen datos (nunca toman decisiones)
@@ -62,57 +62,67 @@ Estado: ✅ Sistema optimizado y listo para escalabilidad
 
 📂 ESTRUCTURA DEL PROYECTO
 QuantBet/
-├── QBMM/                          # Documentación de ingeniería
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml              # CI - Tests y validación (NUEVO v0.3.1)
+│   │   ├── stress.yml          # Tests de estrés diarios (NUEVO v0.3.1)
+│   │   └── release.yml         # Creación de releases (NUEVO v0.3.1)
+│   └── dependabot.yml          # Actualización automática de dependencias (NUEVO v0.3.1)
+├── .pre-commit-config.yaml     # Hooks de calidad (NUEVO v0.3.1)
+├── QBMM/                        # Documentación de ingeniería
 ├── src/
-│   ├── __init__.py                # v0.3.1
-│   ├── config_loader.py           # Singleton para config.yaml
-│   ├── logger.py                  # Logging estructurado
+│   ├── __init__.py             # v0.3.1
+│   ├── config_loader.py        # Singleton para config.yaml
+│   ├── logger.py               # Logging estructurado
 │   ├── domain/
-│   │   └── entities.py            # Snapshot, Opportunity, MarketType, ValueBet, Dutching
+│   │   └── entities.py         # Snapshot, Opportunity, MarketType, ValueBet, Dutching
 │   ├── storage/
-│   │   ├── database.py            # Singleton SQLite optimizado (v0.3.1)
-│   │   ├── repository.py          # CRUD optimizado con índices (v0.3.1)
-│   │   └── migrations.py          # Gestor de migraciones (NUEVO v0.3.1)
+│   │   ├── database.py         # Singleton SQLite optimizado (v0.3.1)
+│   │   ├── repository.py       # CRUD optimizado con índices (v0.3.1)
+│   │   └── migrations.py       # Gestor de migraciones (v0.3.1)
 │   ├── core/
-│   │   ├── arbitrage.py           # Motor de arbitraje multi-mercado
-│   │   ├── scorer.py              # Puntuador 0-100 por mercado
-│   │   ├── bankroll.py            # Validador de fondos
-│   │   ├── value_betting.py       # Detector con modelos reales
-│   │   ├── dutching.py            # Calculador de dutching
-│   │   ├── market_handlers.py     # Handlers: 1X2, Over/Under, Asian, Double Chance
-│   │   ├── probability_model.py   # Historical, Elo models
-│   │   └── poisson_model.py       # Modelo Poisson para fútbol
+│   │   ├── arbitrage.py        # Motor de arbitraje multi-mercado
+│   │   ├── scorer.py           # Puntuador 0-100 por mercado
+│   │   ├── bankroll.py         # Validador de fondos
+│   │   ├── value_betting.py    # Detector con modelos reales
+│   │   ├── dutching.py         # Calculador de dutching
+│   │   ├── market_handlers.py  # Handlers: 1X2, Over/Under, Asian, Double Chance
+│   │   ├── probability_model.py # Historical, Elo models
+│   │   └── poisson_model.py    # Modelo Poisson para fútbol
 │   ├── connectors/
-│   │   ├── base.py                # Interfaz IDataProvider
-│   │   ├── csv_provider.py        # Implementación CSV
-│   │   ├── web_provider.py        # Implementación Playwright
-│   │   └── factory.py             # Fábrica de conectores
+│   │   ├── base.py             # Interfaz IDataProvider
+│   │   ├── csv_provider.py     # Implementación CSV
+│   │   ├── web_provider.py     # Implementación Playwright
+│   │   └── factory.py          # Fábrica de conectores
 │   └── web/
-│       ├── __init__.py            # Módulo web
-│       ├── app.py                 # Flask + APIs REST (v0.3.1)
+│       ├── __init__.py         # Módulo web
+│       ├── app.py              # Flask + APIs REST (v0.3.1)
 │       ├── templates/
-│       │   └── index.html         # Dashboard principal
+│       │   └── index.html      # Dashboard principal
 │       └── static/
-│           ├── style.css          # Dark mode
-│           └── app.js             # Actualización en tiempo real
+│           ├── style.css       # Dark mode
+│           └── app.js          # Actualización en tiempo real
 ├── tests/
-│   ├── test_arbitrage.py          # 5 tests
-│   ├── test_integration.py        # 7 tests
-│   ├── test_bankroll.py           # 7 tests
-│   ├── test_value_betting.py      # 3 tests
-│   ├── test_dutching.py           # 4 tests
-│   ├── test_web_provider.py       # 5 tests
-│   ├── test_dashboard.py          # 5 tests
-│   ├── test_market_handlers.py    # 5 tests
-│   ├── test_probability_model.py  # 6 tests
-│   └── test_migrations.py         # 5 tests (NUEVO v0.3.1)
+│   ├── test_arbitrage.py       # 5 tests
+│   ├── test_integration.py     # 7 tests
+│   ├── test_bankroll.py        # 7 tests
+│   ├── test_value_betting.py   # 3 tests
+│   ├── test_dutching.py        # 4 tests
+│   ├── test_web_provider.py    # 5 tests
+│   ├── test_dashboard.py       # 5 tests
+│   ├── test_market_handlers.py # 5 tests
+│   ├── test_probability_model.py # 6 tests
+│   ├── test_migrations.py      # 5 tests (v0.3.1)
+│   └── test_stress.py          # 6 tests de estrés (v0.3.1 NUEVO)
 ├── data/
-│   ├── sample_events.csv          # 21 snapshots (3 eventos)
-│   └── team_stats.csv             # 10 equipos (datos históricos)
-├── main.py                        # CLI con --mode, --source, --markets, --serve, --stats, --cleanup (v0.3.1)
-├── config.yaml                    # Configuración centralizada (v0.3.1)
-├── requirements.txt               # pytest, pyyaml, playwright, Flask, Jinja2
-└── quantbet.db                    # SQLite (autogenerada)
+│   ├── sample_events.csv       # 21 snapshots (3 eventos)
+│   └── team_stats.csv          # 10 equipos (datos históricos)
+├── main.py                     # CLI v0.3.1
+├── config.yaml                 # Configuración centralizada v0.3.1
+├── requirements.txt            # Dependencias
+├── Makefile                    # Comandos de desarrollo (NUEVO v0.3.1)
+├── README.md                   # Documentación pública (NUEVO v0.3.1)
+└── quantbet.db                 # SQLite (autogenerada)
 🔄 HISTORIAL DE SESIONES
 Sesión 10 - 30/07/2026 - Value Betting y Dutching
 Objetivo: Implementar estrategias de Value Betting y Dutching (Prioridad Media).
@@ -282,20 +292,71 @@ Comando --stats para diagnóstico y --cleanup para mantenimiento
 
 Nuevos tests: 5 → Total tests: 52
 
-Verificación Arquitectónica Pre-Ejecución:
+Sesión 16 - 31/07/2026 - Tests de Estrés (1000+ eventos)
+Objetivo: Validar el rendimiento del sistema con grandes volúmenes de datos.
 
-Archivos escaneados: 25+ archivos en src/, tests/, y QBMM/
+Entregables:
 
-Dependencias mapeadas: migrations.py → database.py → repository.py → app.py/main.py
+CREAR tests/test_stress.py - 6 tests de estrés
 
-Principios validados: 5/5 principios cumplidos
+REEMPLAZAR pytest.ini - Configuración para tests lentos
 
-Riesgos mitigados: Migraciones idempotentes, ON CONFLICT en market_summary
+REEMPLAZAR requirements.txt - Añadir pytest-timeout y pytest-xdist
+
+Decisiones:
+
+Generador de datos masivos (hasta 5,000 eventos)
+
+Tests de rendimiento para arbitraje, value betting y dutching
+
+Validación de market_summary con 2,000 eventos
+
+Pruebas de cleanup y operaciones concurrentes
+
+Marca @pytest.mark.slow para tests de estrés
+
+Nuevos tests: 6 → Total tests: 58
+
+Sesión 17 - 31/07/2026 - CI/CD con GitHub Actions
+Objetivo: Implementar pipelines de integración continua y despliegue continuo.
+
+Entregables:
+
+CREAR .github/workflows/ci.yml - CI con tests, linting y cobertura
+
+CREAR .github/workflows/stress.yml - Tests de estrés programados
+
+CREAR .github/workflows/release.yml - Creación automática de releases
+
+CREAR .github/dependabot.yml - Actualización automática de dependencias
+
+CREAR .pre-commit-config.yaml - Hooks de calidad (Black, flake8, mypy, bandit)
+
+CREAR Makefile - Comandos de desarrollo (install, test, stress, lint, format, coverage, serve, clean)
+
+CREAR README.md - Documentación pública con badges de CI
+
+Decisiones:
+
+CI ejecuta tests en Python 3.9, 3.10, 3.11
+
+Tests de estrés ejecutados diariamente a las 2:00 AM
+
+Cobertura mínima requerida: 70%
+
+Pre-commit hooks para mantener calidad de código
+
+Dependabot para mantener dependencias actualizadas
+
+Makefile para simplificar comandos de desarrollo
 
 📊 MÉTRICAS ACTUALES
 Métrica	Valor
 Versión	0.3.1
-Tests totales	52
+Tests totales	58
+Tests de estrés	6 (5,000+ eventos)
+Workflows CI/CD	3
+Pre-commit hooks	12
 Cobertura principios	5/5 ✅
 Mercados soportados	4 (1X2, Over/Under, Asian Handicap, Double Chance)
 Modelos de probabilidad	3 (Historical, Elo, Poisson)
@@ -303,11 +364,11 @@ Conectores	2 (CSV, Web)
 Estrategias	3 (Arbitraje, Value Betting, Dutching)
 Índices SQLite	8
 Tablas de resumen	1 (market_summary)
-PRAGMA optimizados	5 (WAL, NORMAL, cache, temp_store, foreign_keys)
-Líneas de código	~2,900
-Archivos totales	43
+PRAGMA optimizados	5
+Líneas de código	~3,400
+Archivos totales	48
 🚀 PRÓXIMOS PASOS (Priorizados)
-Prioridad Media (pendiente):
+Prioridad Media (COMPLETADO):
 ~~Value Betting y Dutching~~ ✅ (Sesión 10)
 
 ~~Conectores reales con Playwright~~ ✅ (Sesión 11)
@@ -320,27 +381,27 @@ Prioridad Media (pendiente):
 
 ~~Optimización de queries SQLite~~ ✅ (Sesión 15)
 
-Tests de estrés (1000+ eventos) ← SIGUIENTE
+~~Tests de estrés (1000+ eventos)~~ ✅ (Sesión 16)
 
-CI/CD con GitHub Actions
+~~CI/CD con GitHub Actions~~ ✅ (Sesión 17)
 
+Prioridad Baja (pendiente):
 Sistema de notificaciones (email/telegram)
 
-Prioridad Baja:
 Soporte para más deportes (tenis, baloncesto)
 
 Integración con APIs de bookmakers (Betfair, etc.)
 
-Sistema de notificaciones (email/telegram)
+Documentación de API (Swagger/OpenAPI)
 
-📝 DIARIO - SESIÓN 16 (PRÓXIMA)
-Para iniciar Sesión 16, la IA debe:
+📝 DIARIO - SESIÓN 18 (PRÓXIMA)
+Para iniciar Sesión 18, la IA debe:
 
 Verificación Arquitectónica Pre-Ejecución:
 
-Escanear todo el repositorio (archivos actualizados de Sesión 15)
+Escanear todo el repositorio (archivos actualizados de Sesión 17)
 
-Mapear dependencias de tests de estrés con el resto del sistema
+Mapear dependencias del sistema de notificaciones
 
 Validar principios de arquitectura
 
@@ -348,26 +409,17 @@ Leer repositorio completo (ya escaneado en sesión anterior)
 
 Verificar estado actual vs este diario
 
-Confirmar tests pasando (52/52)
+Confirmar tests pasando (58/58)
 
-Proponer siguiente ítem de Prioridad Media: Tests de estrés (1000+ eventos)
+Proponer siguiente ítem de Prioridad Baja: Sistema de notificaciones (email/telegram)
 
 Ejecutar sin pedir confirmación para lecturas
 
 Estado actual: ✅ Todo validado y sincronizado
-Total archivos: 43
-Total líneas: ~2,900
-Total tests: 52
+Total archivos: 48
+Total líneas: ~3,400
+Total tests: 58
+Progreso total: 8/11 tareas (73%) 🚀
 
-¡Listo para la Sesión 16! 🚀
+¡Listo para la Sesión 18! 🎯
 
-🔗 ENLACES ÚTILES
-Repositorio: https://github.com/viensa90/QuantBet
-
-Último commit: 3d288d7 (Agosto 1, 2026)
-
-Documentación QBMM: Carpeta /QBMM/ en el repositorio
-
-Dashboard: python main.py --serve
-
-Fin del Diario de Proyecto - QuantBet v0.3.1

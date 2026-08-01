@@ -16,6 +16,7 @@ from typing import List, Optional
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.config_loader import configLoader
+config = ConfigLoader().config
 from src.logger import setup_logging
 from src.storage.database import get_db
 from src.storage.repository import Repository

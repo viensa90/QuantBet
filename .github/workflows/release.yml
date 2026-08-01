@@ -46,7 +46,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Subir artefacto a release
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: quantbet-${{ github.ref_name }}
         path: quantbet-${{ github.ref_name }}.zip

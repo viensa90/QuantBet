@@ -1,419 +1,556 @@
 #!/usr/bin/env python3
 """
 QuantBet - Sistema de Arbitraje Deportivo Automatizado
-CLI principal con soporte para múltiples estrategias y modos
-Versión: 0.3.1 (Optimización de rendimiento + Notificaciones)
+CLI Principal - v0.3.3
+
+Uso:
+    python main.py --mode all --source csv
+    python main.py --mode arbitrage --source web
+    python main.py --serve
+    python main.py --stats
+    python main.py --cleanup 30
+    python main.py --export results.json
 """
 
-import sys
 import argparse
-import logging
+import sys
+import json
+import csv
 from pathlib import Path
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional
 
-# Configurar path para imports absolutos
+# Agregar src al path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.config_loader import configLoader
-config = ConfigLoader().config
-from src.logger import setup_logging
-from src.storage.database import get_db
+from src.config_loader import ConfigLoader
+from src.logger import setup_logger
+from src.storage.database import Database
 from src.storage.repository import Repository
-from src.storage.migrations import apply_migrations
-from src.connectors.factory import ProviderFactory
 from src.core.arbitrage import ArbitrageEngine
-from src.core.scorer import OpportunityScorer
 from src.core.value_betting import ValueBetDetector
 from src.core.dutching import DutchingCalculator
-from src.core.probability_model import ProbabilityModelFactory
-from src.domain.entities import Decision, Opportunity, Snapshot
-from src.notifications import NotificationManager
+from src.core.scorer import Scorer
+from src.core.bankroll import BankrollManager
+from src.connectors.csv_provider import CSVProvider
+from src.connectors.web_provider import WebProvider
+from src.connectors.factory import ProviderFactory
+from src.domain.entities import Event, Market, Opportunity
 
-logger = logging.getLogger(__name__)
+# Cargar configuración
+config = ConfigLoader().config
+logger = setup_logger("quantbet")
 
-class QuantBetRunner:
-    """Orquestador principal del sistema QuantBet"""
+
+def run_arbitrage(events: List[Dict]) -> List[Dict]:
+    """
+    Ejecutar motor de arbitraje
     
-    def __init__(self, source: str = "csv", markets: Optional[List[str]] = None):
-        self.source = source
-        self.markets = markets or config.get('markets', {}).get('enabled', ['1X2'])
-        self.repo = Repository()
-        self.scorer = OpportunityScorer()
-        self.notifier = NotificationManager()
-        
-        # Inicializar componentes según configuración
-        self.arbitrage_engine = ArbitrageEngine()
-        self.value_detector = ValueBetDetector()
-        self.dutching_calculator = DutchingCalculator()
-        
-        # Modelo de probabilidad (para value betting)
-        model_type = config.get('probability_model', {}).get('type', 'historical')
-        self.probability_model = ProbabilityModelFactory.get_model(model_type)
-        
-        logger.info(f"QuantBetRunner inicializado con fuente: {source}, mercados: {markets}")
+    Args:
+        events: Lista de eventos
     
-    def fetch_data(self) -> List[Snapshot]:
-        """Obtiene datos del conector configurado"""
-        provider = ProviderFactory.get_provider(self.source)
-        snapshots = provider.fetch_snapshots()
-        
-        if not snapshots:
-            logger.warning("No se obtuvieron datos del proveedor")
-            return []
-        
-        logger.info(f"Obtenidos {len(snapshots)} snapshots")
-        return snapshots
+    Returns:
+        Lista de oportunidades de arbitraje
+    """
+    logger.info("🔄 Ejecutando motor de arbitraje...")
     
-    def save_snapshots(self, snapshots: List[Snapshot]) -> int:
-        """Guarda snapshots en lote y actualiza resumen"""
-        if not snapshots:
-            return 0
-        
-        # Guardar en lote
-        count = self.repo.save_snapshots_batch(snapshots)
-        logger.info(f"Guardados {count} snapshots en lote")
-        
-        return count
+    engine = ArbitrageEngine()
+    opportunities = engine.find_opportunities(events)
     
-    def run_arbitrage(self, snapshots: List[Snapshot]) -> List[Decision]:
-        """Ejecuta el motor de arbitraje"""
-        decisions = []
-        
-        for snapshot in snapshots:
-            # Filtrar por mercado si está especificado
-            if snapshot.market_type not in self.markets:
-                continue
-            
-            opportunities = self.arbitrage_engine.find_opportunities(snapshot)
-            
-            for opp in opportunities:
-                score = self.scorer.score_opportunity(opp)
-                decision = Decision(
-                    event_id=opp.event_id,
-                    strategy="arbitrage",
-                    opportunity_data=opp.to_dict(),
-                    decision_data={
-                        "score": score,
-                        "profit_percent": opp.profit_percent,
-                        "market_type": opp.market_type
-                    },
-                    opportunity_score=score,
-                    timestamp=datetime.now(),
-                    executed=False
-                )
-                decisions.append(decision)
-                
-                logger.debug(f"Arbitraje: {opp.event_id} - Score: {score:.2f} - Profit: {opp.profit_percent:.2f}%")
-        
-        if decisions:
-            self.repo.save_decisions_batch(decisions)
-            self._update_market_summary(decisions)
-            self._send_notifications(decisions)
-            logger.info(f"Guardadas {len(decisions)} decisiones de arbitraje")
-        
-        return decisions
+    # Filtrar por umbral mínimo de beneficio
+    min_profit = config.get("thresholds", {}).get("min_profit_percent", 1.5)
+    opportunities = [o for o in opportunities if o.get("profit_percent", 0) >= min_profit]
     
-    def run_value_betting(self, snapshots: List[Snapshot]) -> List[Decision]:
-        """Ejecuta el detector de value betting con modelo de probabilidad"""
-        decisions = []
-        
-        for snapshot in snapshots:
-            if snapshot.market_type not in self.markets:
-                continue
-            
-            # Usar el modelo de probabilidad para calcular fair odds
-            fair_prob = self.probability_model.predict(snapshot)
-            if fair_prob is None:
-                continue
-            
-            # Detectar value bets
-            value_bets = self.value_detector.detect(snapshot, fair_prob)
-            
-            for bet in value_bets:
-                decision = Decision(
-                    event_id=snapshot.event_id,
-                    strategy="value_betting",
-                    opportunity_data={
-                        "market_type": snapshot.market_type,
-                        "selection": bet.get("selection", "unknown"),
-                        "odds": bet.get("odds", 0.0),
-                        "implied_prob": bet.get("implied_prob", 0.0),
-                        "fair_prob": bet.get("fair_prob", 0.0),
-                        "model": self.probability_model.__class__.__name__
-                    },
-                    decision_data={
-                        "value": bet.get("value", 0.0),
-                        "edge_percent": bet.get("edge_percent", 0.0)
-                    },
-                    opportunity_score=bet.get("score", 0.0),
-                    timestamp=datetime.now(),
-                    executed=False
-                )
-                decisions.append(decision)
-                
-                logger.debug(f"Value Bet: {bet.get('selection')} - Edge: {bet.get('edge_percent', 0):.2f}%")
-        
-        if decisions:
-            self.repo.save_decisions_batch(decisions)
-            self._update_market_summary(decisions)
-            self._send_notifications(decisions)
-            logger.info(f"Guardadas {len(decisions)} decisiones de value betting")
-        
-        return decisions
+    logger.info(f"✅ Arbitraje: {len(opportunities)} oportunidades encontradas")
     
-    def run_dutching(self, snapshots: List[Snapshot]) -> List[Decision]:
-        """Ejecuta el calculador de dutching"""
-        decisions = []
-        
-        for snapshot in snapshots:
-            if snapshot.market_type not in self.markets:
-                continue
-            
-            # Extraer odds del snapshot
-            odds_list = list(snapshot.odds_data.values()) if snapshot.odds_data else []
-            
-            # Necesitamos al menos 2 odds para dutching
-            if len(odds_list) < 2:
-                continue
-            
-            dutching_results = self.dutching_calculator.calculate_stakes(odds_list)
-            
-            if dutching_results and dutching_results.get("stakes"):
-                decision = Decision(
-                    event_id=snapshot.event_id,
-                    strategy="dutching",
-                    opportunity_data={
-                        "market_type": snapshot.market_type,
-                        "odds": odds_list,
-                        "total_stake": dutching_results.get("total_stake", 0.0),
-                        "selections": list(snapshot.odds_data.keys())
-                    },
-                    decision_data={
-                        "stakes": dutching_results.get("stakes", []),
-                        "guaranteed_return": dutching_results.get("guaranteed_return", 0.0),
-                        "profit_margin": dutching_results.get("profit_margin", 0.0)
-                    },
-                    opportunity_score=dutching_results.get("score", 50.0),
-                    timestamp=datetime.now(),
-                    executed=False
-                )
-                decisions.append(decision)
-                
-                logger.debug(f"Dutching: {snapshot.event_id} - Return: {dutching_results.get('guaranteed_return', 0):.2f}")
-        
-        if decisions:
-            self.repo.save_decisions_batch(decisions)
-            self._update_market_summary(decisions)
-            self._send_notifications(decisions)
-            logger.info(f"Guardadas {len(decisions)} decisiones de dutching")
-        
-        return decisions
+    return opportunities
+
+
+def run_value_betting(events: List[Dict]) -> List[Dict]:
+    """
+    Ejecutar detector de value betting
     
-    def _update_market_summary(self, decisions: List[Decision]):
-        """Actualiza el resumen de mercado para el dashboard"""
-        for decision in decisions:
-            # Extraer información de la decisión
-            opp_data = decision.opportunity_data
-            market_type = opp_data.get('market_type', 'unknown')
-            
-            # Obtener o calcular métricas
-            best_opp = decision.opportunity_score
-            total_opps = 1  # Por ahora 1, se puede mejorar con agregación
-            
-            self.repo.update_market_summary(
-                event_id=decision.event_id,
-                market_type=market_type,
-                best_opportunity=best_opp,
-                total_opportunities=total_opps,
-                avg_score=best_opp
-            )
+    Args:
+        events: Lista de eventos
     
-    def _send_notifications(self, decisions: List[Decision]):
-        """Envía notificaciones para decisiones de alto score"""
-        if not decisions:
-            return
-        
-        # Convertir a dict para el notificador
-        decisions_dict = [
-            {
-                'event_id': d.event_id,
-                'strategy': d.strategy,
-                'score': d.opportunity_score,
-                'data': d.opportunity_data,
-                'timestamp': d.timestamp.isoformat()
+    Returns:
+        Lista de oportunidades de value betting
+    """
+    logger.info("💎 Ejecutando detector de value betting...")
+    
+    detector = ValueBetDetector()
+    opportunities = detector.find_value_bets(events)
+    
+    # Filtrar por probabilidad mínima
+    min_prob = config.get("thresholds", {}).get("min_value_probability", 0.65)
+    opportunities = [o for o in opportunities if o.get("value_probability", 0) >= min_prob]
+    
+    logger.info(f"✅ Value Betting: {len(opportunities)} oportunidades encontradas")
+    
+    return opportunities
+
+
+def run_dutching(events: List[Dict]) -> List[Dict]:
+    """
+    Ejecutar calculador de dutching
+    
+    Args:
+        events: Lista de eventos
+    
+    Returns:
+        Lista de oportunidades de dutching
+    """
+    logger.info("📊 Ejecutando calculador de dutching...")
+    
+    calculator = DutchingCalculator()
+    opportunities = calculator.find_dutching_opportunities(events)
+    
+    logger.info(f"✅ Dutching: {len(opportunities)} oportunidades encontradas")
+    
+    return opportunities
+
+
+def run_pipeline(
+    source: str = "csv",
+    mode: str = "all",
+    save: bool = True,
+    limit: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    Ejecutar pipeline completo
+    
+    Args:
+        source: Fuente de datos (csv | web)
+        mode: Modo de ejecución (all | arbitrage | value | dutching)
+        save: Guardar resultados en BD
+        limit: Límite de eventos a procesar
+    
+    Returns:
+        Diccionario con resultados
+    """
+    logger.info(f"🚀 Iniciando pipeline con fuente: {source}, modo: {mode}")
+    
+    # 1. Obtener datos
+    provider = ProviderFactory.get_provider(source)
+    events = provider.fetch_events()
+    
+    if not events:
+        logger.error("❌ No se obtuvieron eventos")
+        return {"error": "No se obtuvieron eventos"}
+    
+    if limit:
+        events = events[:limit]
+    
+    logger.info(f"📥 Obtenidos {len(events)} eventos")
+    
+    # 2. Ejecutar estrategias
+    strategies = config.get("strategies", {})
+    all_opportunities = []
+    results = {}
+    
+    if mode in ["all", "arbitrage"] and strategies.get("arbitrage", False):
+        opps = run_arbitrage(events)
+        all_opportunities.extend(opps)
+        results["arbitrage"] = len(opps)
+    
+    if mode in ["all", "value"] and strategies.get("value_betting", False):
+        opps = run_value_betting(events)
+        all_opportunities.extend(opps)
+        results["value_betting"] = len(opps)
+    
+    if mode in ["all", "dutching"] and strategies.get("dutching", False):
+        opps = run_dutching(events)
+        all_opportunities.extend(opps)
+        results["dutching"] = len(opps)
+    
+    # 3. Guardar en base de datos
+    if save and all_opportunities:
+        repo = Repository()
+        snapshot_id = repo.save_snapshot(events, source)
+        repo.save_opportunities(all_opportunities, snapshot_id)
+        logger.info(f"💾 Guardados {len(all_opportunities)} oportunidades en BD")
+        results["snapshot_id"] = snapshot_id
+    
+    results["total_opportunities"] = len(all_opportunities)
+    results["events_processed"] = len(events)
+    results["opportunities"] = all_opportunities
+    
+    # 4. Mostrar resumen
+    print_summary(results)
+    
+    return results
+
+
+def print_summary(results: Dict[str, Any]):
+    """Imprimir resumen de resultados"""
+    print("\n" + "="*60)
+    print("📊 RESUMEN DE EJECUCIÓN")
+    print("="*60)
+    print(f"📥 Eventos procesados: {results.get('events_processed', 0)}")
+    print(f"🎯 Total oportunidades: {results.get('total_opportunities', 0)}")
+    
+    if "arbitrage" in results:
+        print(f"   🔄 Arbitraje: {results['arbitrage']}")
+    if "value_betting" in results:
+        print(f"   💎 Value Betting: {results['value_betting']}")
+    if "dutching" in results:
+        print(f"   📊 Dutching: {results['dutching']}")
+    
+    if results.get("snapshot_id"):
+        print(f"💾 Snapshot ID: {results['snapshot_id']}")
+    
+    # Mostrar top oportunidades
+    opportunities = results.get("opportunities", [])
+    if opportunities:
+        print("\n🏆 TOP 5 OPORTUNIDADES:")
+        print("-"*60)
+        for i, opp in enumerate(opportunities[:5], 1):
+            strategy = opp.get("strategy", "N/A")
+            event = opp.get("event", "Desconocido")
+            profit = opp.get("profit_percent", 0)
+            print(f"{i}. [{strategy.upper()}] {event}")
+            print(f"   💰 Beneficio: {profit:.2f}%")
+            print("-"*40)
+    
+    print("="*60)
+
+
+def show_stats():
+    """Mostrar estadísticas de la base de datos"""
+    logger.info("📊 Obteniendo estadísticas...")
+    
+    repo = Repository()
+    stats = repo.get_stats()
+    
+    print("\n" + "="*50)
+    print("📊 ESTADÍSTICAS DEL SISTEMA")
+    print("="*50)
+    print(f"📥 Total snapshots: {stats.get('total_snapshots', 0)}")
+    print(f"🎯 Total oportunidades: {stats.get('total_opportunities', 0)}")
+    print(f"📈 Arbitraje: {stats.get('arbitrage_count', 0)}")
+    print(f"💎 Value Betting: {stats.get('value_betting_count', 0)}")
+    print(f"📊 Dutching: {stats.get('dutching_count', 0)}")
+    print(f"💾 Tamaño BD: {stats.get('db_size_mb', 0):.2f} MB")
+    print(f"📅 Última ejecución: {stats.get('last_execution', 'N/A')}")
+    print("="*50)
+    
+    return stats
+
+
+def cleanup_database(days: int):
+    """
+    Limpiar datos antiguos
+    
+    Args:
+        days: Días a conservar
+    """
+    logger.info(f"🧹 Limpiando datos anteriores a {days} días...")
+    
+    repo = Repository()
+    deleted = repo.cleanup_old_data(days)
+    
+    print(f"✅ Eliminados {deleted} registros antiguos")
+    
+    return deleted
+
+
+def export_results(
+    output_file: str,
+    format: str = "json",
+    days: int = 7
+):
+    """
+    Exportar resultados a archivo
+    
+    Args:
+        output_file: Ruta del archivo de salida
+        format: Formato (json | csv)
+        days: Días a exportar
+    """
+    logger.info(f"📤 Exportando resultados a {output_file} ({format})")
+    
+    repo = Repository()
+    cutoff_date = datetime.now() - timedelta(days=days)
+    opportunities = repo.get_opportunities_since(cutoff_date)
+    
+    if not opportunities:
+        print("❌ No hay oportunidades para exportar")
+        return
+    
+    # Crear directorio si no existe
+    Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+    
+    if format == "json":
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(opportunities, f, indent=2, ensure_ascii=False, default=str)
+    elif format == "csv":
+        if opportunities:
+            keys = opportunities[0].keys()
+            with open(output_file, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=keys)
+                writer.writeheader()
+                writer.writerows(opportunities)
+    else:
+        print(f"❌ Formato no soportado: {format}")
+        return
+    
+    print(f"✅ Exportadas {len(opportunities)} oportunidades a {output_file}")
+
+
+def generate_report(days: int = 7) -> Dict[str, Any]:
+    """
+    Generar reporte detallado
+    
+    Args:
+        days: Días a incluir en el reporte
+    
+    Returns:
+        Diccionario con reporte
+    """
+    logger.info(f"📋 Generando reporte de {days} días...")
+    
+    repo = Repository()
+    cutoff_date = datetime.now() - timedelta(days=days)
+    opportunities = repo.get_opportunities_since(cutoff_date)
+    
+    # Estadísticas por estrategia
+    strategies = {}
+    total_profit = 0.0
+    
+    for opp in opportunities:
+        strategy = opp.get("strategy", "unknown")
+        if strategy not in strategies:
+            strategies[strategy] = {
+                "count": 0,
+                "total_profit": 0.0,
+                "avg_profit": 0.0,
+                "max_profit": 0.0
             }
-            for d in decisions
-        ]
         
-        # Enviar notificaciones
-        self.notifier.check_and_notify(force=True)
+        profit = opp.get("profit_percent", 0)
+        strategies[strategy]["count"] += 1
+        strategies[strategy]["total_profit"] += profit
+        if profit > strategies[strategy]["max_profit"]:
+            strategies[strategy]["max_profit"] = profit
+        
+        total_profit += profit
     
-    def run_all(self, snapshots: List[Snapshot]) -> dict:
-        """Ejecuta todas las estrategias y retorna resumen"""
-        results = {
-            "arbitrage": len(self.run_arbitrage(snapshots)),
-            "value_betting": len(self.run_value_betting(snapshots)),
-            "dutching": len(self.run_dutching(snapshots)),
-            "total_snapshots": len(snapshots),
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        logger.info(f"Pipeline completo finalizado: {results}")
-        return results
+    # Calcular promedios
+    for strategy in strategies.values():
+        if strategy["count"] > 0:
+            strategy["avg_profit"] = strategy["total_profit"] / strategy["count"]
     
-    def run_pipeline(self, mode: str = "all") -> dict:
-        """Ejecuta el pipeline completo según modo"""
-        # 1. Obtener datos
-        snapshots = self.fetch_data()
-        if not snapshots:
-            return {"error": "No se obtuvieron datos", "snapshots": 0}
-        
-        # 2. Guardar snapshots en lote
-        self.save_snapshots(snapshots)
-        
-        # 3. Ejecutar estrategias según modo
-        if mode == "arbitrage":
-            decisions = self.run_arbitrage(snapshots)
-            return {"mode": "arbitrage", "decisions": len(decisions), "snapshots": len(snapshots)}
-        elif mode == "value":
-            decisions = self.run_value_betting(snapshots)
-            return {"mode": "value_betting", "decisions": len(decisions), "snapshots": len(snapshots)}
-        elif mode == "dutching":
-            decisions = self.run_dutching(snapshots)
-            return {"mode": "dutching", "decisions": len(decisions), "snapshots": len(snapshots)}
-        else:  # all
-            return self.run_all(snapshots)
+    # Top eventos
+    top_events = sorted(
+        opportunities,
+        key=lambda x: x.get("profit_percent", 0),
+        reverse=True
+    )[:10]
+    
+    report = {
+        "generated_at": datetime.now().isoformat(),
+        "period_days": days,
+        "total_opportunities": len(opportunities),
+        "total_profit_avg": total_profit / len(opportunities) if opportunities else 0,
+        "strategies": strategies,
+        "top_events": top_events,
+        "by_sport": {},
+        "by_market": {}
+    }
+    
+    # Agrupar por deporte
+    for opp in opportunities:
+        sport = opp.get("sport", "unknown")
+        if sport not in report["by_sport"]:
+            report["by_sport"][sport] = 0
+        report["by_sport"][sport] += 1
+    
+    # Agrupar por mercado
+    for opp in opportunities:
+        market = opp.get("market_type", "unknown")
+        if market not in report["by_market"]:
+            report["by_market"][market] = 0
+        report["by_market"][market] += 1
+    
+    # Mostrar reporte
+    print("\n" + "="*60)
+    print("📋 REPORTE DE OPORTUNIDADES")
+    print("="*60)
+    print(f"📅 Período: {days} días")
+    print(f"🎯 Total oportunidades: {report['total_opportunities']}")
+    print(f"💰 Beneficio promedio: {report['total_profit_avg']:.2f}%")
+    print("\n📊 Por estrategia:")
+    for strategy, data in strategies.items():
+        print(f"   {strategy}: {data['count']} oportunidades, {data['avg_profit']:.2f}% promedio")
+    print("\n🏆 Top eventos:")
+    for i, event in enumerate(top_events[:5], 1):
+        print(f"   {i}. {event.get('event', 'N/A')} - {event.get('profit_percent', 0):.2f}%")
+    print("="*60)
+    
+    return report
 
-def serve_dashboard():
-    """Inicia el servidor web del dashboard"""
-    logger.info("Iniciando dashboard web...")
-    
-    try:
-        from src.web.app import app, init_app
-        init_app()
-        
-        host = config.get('web', {}).get('host', '0.0.0.0')
-        port = config.get('web', {}).get('port', 5000)
-        debug = config.get('web', {}).get('debug', True)
-        
-        logger.info(f"Dashboard disponible en http://{host}:{port}")
-        app.run(host=host, port=port, debug=debug)
-    
-    except ImportError as e:
-        logger.error(f"Error al iniciar dashboard: {e}")
-        logger.error("Asegúrate de que Flask y Jinja2 estén instalados")
-        sys.exit(1)
 
 def main():
     """Punto de entrada principal"""
-    # Configurar logging
-    setup_logging()
-    
-    # Aplicar migraciones al inicio
-    logger.info("Verificando migraciones de base de datos...")
-    try:
-        apply_migrations()
-        logger.info("Migraciones aplicadas correctamente")
-    except Exception as e:
-        logger.error(f"Error al aplicar migraciones: {e}")
-        # Continuar de todas formas, puede que la BD ya esté actualizada
-    
     parser = argparse.ArgumentParser(
-        description='QuantBet - Sistema de Arbitraje Deportivo Automatizado v0.3.1',
-        epilog='Ejemplos:\n  python main.py --mode arbitrage --source csv\n  python main.py --serve\n  python main.py --cleanup 30'
+        description="QuantBet - Sistema de Arbitraje Deportivo",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Ejemplos:
+  python main.py --mode all --source csv
+  python main.py --mode arbitrage --source web
+  python main.py --serve
+  python main.py --stats
+  python main.py --cleanup 30
+  python main.py --export results.json
+  python main.py --report 7
+        """
     )
     
-    parser.add_argument('--mode', 
-                       choices=['arbitrage', 'value', 'dutching', 'all'], 
-                       default='all',
-                       help='Modo de ejecución (default: all)')
+    parser.add_argument(
+        "--mode",
+        choices=["all", "arbitrage", "value", "dutching"],
+        default="all",
+        help="Modo de ejecución (default: all)"
+    )
     
-    parser.add_argument('--source', 
-                       choices=['csv', 'web'], 
-                       default='csv',
-                       help='Fuente de datos (default: csv)')
+    parser.add_argument(
+        "--source",
+        choices=["csv", "web"],
+        default="csv",
+        help="Fuente de datos (default: csv)"
+    )
     
-    parser.add_argument('--markets', 
-                       nargs='+',
-                       help='Mercados a analizar (ej: "1X2" "Over/Under")')
+    parser.add_argument(
+        "--limit",
+        type=int,
+        metavar="N",
+        help="Límite de eventos a procesar"
+    )
     
-    parser.add_argument('--serve', 
-                       action='store_true',
-                       help='Iniciar dashboard web en lugar de ejecutar pipeline')
+    parser.add_argument(
+        "--no-save",
+        action="store_true",
+        help="No guardar resultados en BD"
+    )
     
-    parser.add_argument('--cleanup', 
-                       type=int, 
-                       default=0,
-                       help='Limpiar datos antiguos (días a conservar)')
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="Iniciar dashboard web"
+    )
     
-    parser.add_argument('--stats', 
-                       action='store_true',
-                       help='Mostrar estadísticas de la base de datos y salir')
+    parser.add_argument(
+        "--stats",
+        action="store_true",
+        help="Mostrar estadísticas de la base de datos"
+    )
     
-    parser.add_argument('--notify', 
-                       action='store_true',
-                       help='Verificar y enviar notificaciones manualmente')
+    parser.add_argument(
+        "--cleanup",
+        type=int,
+        metavar="DAYS",
+        help="Limpiar datos antiguos (días)"
+    )
     
-    parser.add_argument('--send-manual', 
-                       nargs=2,
-                       metavar=('EVENT_ID', 'STRATEGY'),
-                       help='Enviar notificación manual para un evento (ej: event_001 all)')
+    parser.add_argument(
+        "--export",
+        metavar="FILE",
+        help="Exportar resultados a archivo (JSON o CSV)"
+    )
+    
+    parser.add_argument(
+        "--format",
+        choices=["json", "csv"],
+        default="json",
+        help="Formato de exportación (default: json)"
+    )
+    
+    parser.add_argument(
+        "--report",
+        type=int,
+        metavar="DAYS",
+        nargs="?",
+        const=7,
+        help="Generar reporte de N días (default: 7)"
+    )
+    
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Activar modo debug"
+    )
     
     args = parser.parse_args()
     
-    # Notificaciones manuales
-    if args.notify:
-        notifier = NotificationManager()
-        sent = notifier.check_and_notify(force=True)
-        print(f"\n✅ Notificaciones enviadas: {sent}")
-        return
+    # Configurar debug
+    if args.debug:
+        config["logs"]["level"] = "DEBUG"
+        logger.setLevel("DEBUG")
+        logger.debug("🔍 Modo debug activado")
     
-    if args.send_manual:
-        event_id, strategy = args.send_manual
-        notifier = NotificationManager()
-        sent = notifier.send_manual_notification(event_id, strategy)
-        if sent:
-            print(f"\n✅ Notificación manual enviada para evento {event_id}")
-        else:
-            print(f"\n❌ No se pudo enviar notificación para evento {event_id}")
-        return
+    # --- Comandos de gestión ---
     
-    # Mostrar estadísticas
-    if args.stats:
-        repo = Repository()
-        stats = repo.get_db_stats()
-        print("\n=== ESTADÍSTICAS DE QuantBet ===\n")
-        print(f"Snapshots totales: {stats['snapshots']['total']}")
-        print(f"  Por mercado: {stats['snapshots']['by_market']}")
-        print(f"  Último snapshot: {stats['snapshots']['last_timestamp']}")
-        print(f"\nDecisiones totales: {stats['decisions']['total']}")
-        print(f"  Por estrategia: {stats['decisions']['by_strategy']}")
-        print(f"  Score promedio: {stats['decisions']['avg_score']}")
-        print(f"\nResúmenes de mercado: {stats['summary']['total_markets']}")
-        return
-    
-    # Limpiar datos antiguos
-    if args.cleanup > 0:
-        repo = Repository()
-        repo.cleanup_old_data(days_to_keep=args.cleanup)
-        logger.info(f"Limpieza completada: conservando {args.cleanup} días")
-        return
-    
-    # Iniciar dashboard
     if args.serve:
-        serve_dashboard()
+        # Iniciar servidor web
+        logger.info("🌐 Iniciando dashboard web...")
+        try:
+            from src.web.app import create_app
+            web_config = config.get("web", {})
+            app = create_app()
+            app.run(
+                host=web_config.get("host", "0.0.0.0"),
+                port=web_config.get("port", 5000),
+                debug=web_config.get("debug", False) or args.debug
+            )
+        except ImportError as e:
+            logger.error(f"❌ Error importando módulo web: {e}")
+            sys.exit(1)
         return
     
-    # Ejecutar pipeline
-    runner = QuantBetRunner(source=args.source, markets=args.markets)
-    result = runner.run_pipeline(mode=args.mode)
+    if args.stats:
+        show_stats()
+        return
     
-    # Mostrar resumen
-    print("\n=== RESUMEN DE EJECUCIÓN ===\n")
-    for key, value in result.items():
-        print(f"{key}: {value}")
-    print(f"\nTimestamp: {datetime.now().isoformat()}")
+    if args.cleanup:
+        cleanup_database(args.cleanup)
+        return
+    
+    if args.export:
+        export_results(args.export, args.format)
+        return
+    
+    if args.report:
+        generate_report(args.report)
+        return
+    
+    # --- Ejecución principal ---
+    
+    try:
+        results = run_pipeline(
+            source=args.source,
+            mode=args.mode,
+            save=not args.no_save,
+            limit=args.limit
+        )
+        
+        if results.get("error"):
+            sys.exit(1)
+        
+        # Si hay oportunidades y se guardaron, mostrar estadísticas
+        if results.get("total_opportunities", 0) > 0 and not args.no_save:
+            print("\n💡 Ejecuta 'python main.py --stats' para ver estadísticas completas")
+        
+    except KeyboardInterrupt:
+        logger.info("⏹️ Ejecución interrumpida por el usuario")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"❌ Error inesperado: {e}")
+        if args.debug:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

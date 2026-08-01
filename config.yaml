@@ -1,5 +1,5 @@
 # QuantBet - Configuración Centralizada
-# Versión: 0.3.2
+# Versión: 0.3.3
 
 # --- Estrategias ---
 strategies:
@@ -80,7 +80,27 @@ notifications:
 
 # --- Dashboard Web ---
 web:
-  host: "0.0.0.0"        # Nuevo - Configuración del servidor web
-  port: 5000             # Nuevo - Puerto del dashboard
-  debug: false           # Nuevo - Modo debug
-  swagger_enabled: true  # Nuevo - Activar/desactivar Swagger UI
+  host: "0.0.0.0"
+  port: 5000
+  debug: false
+  swagger_enabled: true
+  refresh_interval: 5000  # ms para actualización automática
+
+# --- Logs Avanzados ---
+logs:
+  level: "INFO"  # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  format: "json"  # json | text
+  elasticsearch:
+    enabled: false
+    hosts: ["http://localhost:9200"]
+    index: "quantbet-logs"
+    username: ""
+    password: ""
+  file:
+    enabled: true
+    path: "logs/quantbet.log"
+    max_size_mb: 100
+    backup_count: 5
+  console:
+    enabled: true
+    color: true

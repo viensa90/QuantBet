@@ -3,81 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuantBet Dashboard</title>
+    <title>QuantBet - Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <header>
-        <h1>📊 QuantBet Dashboard</h1>
-        <div class="status-bar">
-            <span id="status">🟢 Conectado</span>
-            <span id="version">v0.2.0</span>
-            <span id="bankroll">Bankroll: €1,000.00</span>
+    <div class="container">
+        <header class="header">
+            <h1>📊 QuantBet Dashboard</h1>
+            <div class="header-info">
+                <span id="version">v0.3.3</span>
+                <span class="dot"></span>
+                <span id="last-update">Actualizado: hace un momento</span>
+            </div>
+        </header>
+
+        <div class="grid">
+            <!-- Tarjeta: Total Oportunidades -->
+            <div class="card">
+                <div class="card-title">🎯 Total Oportunidades</div>
+                <div class="card-value" id="total-opportunities">0</div>
+                <div class="card-subtitle">Oportunidades detectadas</div>
+            </div>
+
+            <!-- Tarjeta: Mercados Activos -->
+            <div class="card">
+                <div class="card-title">📈 Mercados Activos</div>
+                <div class="card-value" id="active-markets">0</div>
+                <div class="card-subtitle">Mercados configurados</div>
+            </div>
+
+            <!-- Tarjeta: Arbitraje -->
+            <div class="card">
+                <div class="card-title">🔄 Arbitraje</div>
+                <div class="card-value" id="arbitrage-count">0</div>
+                <div class="card-subtitle">Oportunidades de arbitraje</div>
+            </div>
+
+            <!-- Tarjeta: Value Betting -->
+            <div class="card">
+                <div class="card-title">💎 Value Betting</div>
+                <div class="card-value" id="value-count">0</div>
+                <div class="card-subtitle">Apuestas con valor</div>
+            </div>
         </div>
-    </header>
 
-    <main>
-        <section class="stats">
-            <div class="stat-card">
-                <h3>Snapshots</h3>
-                <p id="total-snapshots">0</p>
+        <div class="charts-row">
+            <!-- Gráfico: Oportunidades por Estrategia -->
+            <div class="chart-card">
+                <div class="card-title">📊 Oportunidades por Estrategia</div>
+                <div class="chart-container">
+                    <canvas id="strategyChart"></canvas>
+                </div>
             </div>
-            <div class="stat-card">
-                <h3>Decisiones</h3>
-                <p id="total-decisions">0</p>
-            </div>
-            <div class="stat-card">
-                <h3>Oportunidades</h3>
-                <p id="opportunities-count">0</p>
-            </div>
-            <div class="stat-card">
-                <h3>Fuente</h3>
-                <p id="connector-type">CSV</p>
-            </div>
-        </section>
 
-        <section class="opportunities">
-            <h2>🔄 Oportunidades Recientes</h2>
+            <!-- Gráfico: Tendencia de Oportunidades -->
+            <div class="chart-card">
+                <div class="card-title">📈 Tendencia de Oportunidades</div>
+                <div class="chart-container">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla: Últimas Oportunidades -->
+        <div class="table-card">
+            <div class="card-title">🔍 Últimas Oportunidades</div>
             <div class="table-container">
-                <table id="opportunities-table">
+                <table>
                     <thead>
                         <tr>
                             <th>Evento</th>
+                            <th>Deporte</th>
+                            <th>Mercado</th>
                             <th>Estrategia</th>
-                            <th>Score</th>
-                            <th>Stake</th>
-                            <th>Estado</th>
-                            <th>Timestamp</th>
+                            <th>Beneficio %</th>
                         </tr>
                     </thead>
-                    <tbody id="opportunities-body">
-                        <tr><td colspan="6" class="loading">Cargando oportunidades...</td></tr>
+                    <tbody id="opportunities-table">
+                        <tr><td colspan="5">Cargando oportunidades...</td></tr>
                     </tbody>
                 </table>
             </div>
-        </section>
+        </div>
 
-        <section class="snapshots">
-            <h2>📈 Snapshots Recientes</h2>
-            <div class="table-container">
-                <table id="snapshots-table">
-                    <thead>
-                        <tr>
-                            <th>Evento</th>
-                            <th>Fuente</th>
-                            <th>Local</th>
-                            <th>Empate</th>
-                            <th>Visitante</th>
-                            <th>Timestamp</th>
-                        </tr>
-                    </thead>
-                    <tbody id="snapshots-body">
-                        <tr><td colspan="6" class="loading">Cargando snapshots...</td></tr>
-                    </tbody>
-                </table>
+        <!-- Estado del Sistema -->
+        <div class="status-card">
+            <div class="card-title">⚙️ Estado del Sistema</div>
+            <div id="system-status">
+                <div class="status-item">
+                    <span class="status-label">Base de datos:</span>
+                    <span class="status-value" id="db-status">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Conectores:</span>
+                    <span class="status-value" id="connectors-status">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Modelos cargados:</span>
+                    <span class="status-value" id="models-status">-</span>
+                </div>
             </div>
-        </section>
-    </main>
+        </div>
+    </div>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

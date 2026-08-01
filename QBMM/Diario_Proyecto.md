@@ -1,4 +1,4 @@
-📋 DIARIO DE PROYECTO - QuantBet (COMPLETO v0.3.3)
+📋 DIARIO DE PROYECTO - QuantBet (COMPLETO v0.3.3 - ESTADO: EN REPARACIÓN)
 🚀 INSTRUCCIONES PARA IA (Nuevo Chat)
 Al iniciar un nuevo chat, copia TODO este archivo como primer mensaje.
 
@@ -16,36 +16,20 @@ Los principios de arquitectura son inmutables (ver sección Principios)
 
 NUNCA digas "no puedo acceder" - el repositorio es público y siempre accesible
 
-#6 - Verificación Arquitectónica Pre-Ejecución (NUEVO - Sesión 15):
+SIEMPRE escanea minuciosamente el repositorio antes de proponer cambios
+
+#6 - Verificación Arquitectónica Pre-Ejecución:
 Antes de generar cualquier archivo nuevo o reemplazar uno existente, la IA DEBE:
 
-Escaneo completo del repositorio: Leer todos los archivos relevantes del proyecto, incluyendo:
+Escaneo completo del repositorio: Leer todos los archivos relevantes del proyecto
 
-src/ (todos los módulos)
+Mapeo de dependencias: Identificar dependencias entre archivos
 
-tests/ (para entender los casos de prueba existentes)
+Validación de principios: Confirmar que no se violan los 5 principios
 
-QBMM/ (documentación de ingeniería para entender los principios de diseño)
+Análisis de impacto: Evaluar cómo afecta a tests existentes
 
-config.yaml, main.py, y requirements.txt
-
-Mapeo de dependencias: Identificar explícitamente las dependencias entre los archivos que se van a modificar y el resto del sistema.
-
-Validación de principios: Confirmar que el cambio propuesto no viola ninguno de los 5 principios de arquitectura inmutables.
-
-Análisis de impacto: Evaluar cómo afectará el cambio a los tests existentes y a la funcionalidad general.
-
-Reporte de coherencia: Incluir en la respuesta un breve informe de verificación que indique:
-
-Archivos escaneados.
-
-Dependencias identificadas.
-
-Principios validados.
-
-Riesgos potenciales (si los hay) y cómo se mitigan.
-
-Esta verificación es OBLIGATORIA y debe realizarse al inicio de CADA sesión, incluso si se solicita una continuación directa.
+Reporte de coherencia: Incluir informe de verificación
 
 📋 RESUMEN EJECUTIVO
 Métrica	Valor
@@ -53,7 +37,7 @@ Proyecto	QuantBet - Sistema de Arbitraje Deportivo Automatizado
 Versión	0.3.3
 Repositorio	https://github.com/viensa90/QuantBet
 Última sesión	22 - 01/08/2026
-Estado	✅ PLATAFORMA COMPLETA - Con UI mejorada y logs avanzados
+Estado	⚠️ EN REPARACIÓN - Errores de importación en storage
 🎯 PRINCIPIOS DE ARQUITECTURA (INMUTABLES)
 #	Principio	Descripción
 #1	Conectores solo obtienen datos	Nunca toman decisiones
@@ -61,87 +45,35 @@ Estado	✅ PLATAFORMA COMPLETA - Con UI mejorada y logs avanzados
 #3	Snapshots inmutables	Solo INSERT en SQLite, nunca UPDATE
 #4	Decisiones auditables	Trazabilidad completa en BD
 #5	Configuración externalizada	config.yaml, nada hardcodeado
-📂 ESTRUCTURA DEL PROYECTO
+📂 ESTRUCTURA DEL PROYECTO (ESTADO ACTUAL)
 QuantBet/
-├── .github/
-│   ├── workflows/
-│   │   ├── ci.yml              # CI - Tests y validación
-│   │   ├── stress.yml          # Tests de estrés diarios
-│   │   └── release.yml         # Creación de releases
-│   └── dependabot.yml          # Actualización automática de dependencias
-├── .pre-commit-config.yaml     # Hooks de calidad
-├── QBMM/                        # Documentación de ingeniería
+├── .github/                      ✅ OK
+├── QBMM/                         ✅ OK
 ├── src/
-│   ├── __init__.py             # v0.3.3
-│   ├── config_loader.py        # Singleton para config.yaml
-│   ├── logger.py               # Logging estructurado (v0.3.3)
-│   ├── logging/                # NUEVO - Módulo de logs avanzados
-│   │   └── handlers.py         # Handlers para Elasticsearch
-│   ├── domain/
-│   │   └── entities.py         # Entidades (Fútbol, Tenis, Baloncesto)
-│   ├── storage/
-│   │   ├── database.py         # Singleton SQLite optimizado
-│   │   ├── repository.py       # CRUD optimizado con índices
-│   │   └── migrations.py       # Gestor de migraciones
-│   ├── core/
-│   │   ├── arbitrage.py        # Motor de arbitraje multi-mercado
-│   │   ├── scorer.py           # Puntuador 0-100 por mercado
-│   │   ├── bankroll.py         # Validador de fondos
-│   │   ├── value_betting.py    # Detector con modelos reales
-│   │   ├── dutching.py         # Calculador de dutching
-│   │   ├── market_handlers.py  # Handlers: 11 mercados
-│   │   ├── probability_model.py # Historical, Elo models
-│   │   └── poisson_model.py    # Modelo Poisson para fútbol
-│   ├── connectors/
-│   │   ├── base.py             # Interfaz IDataProvider
-│   │   ├── csv_provider.py     # Implementación CSV
-│   │   ├── web_provider.py     # Implementación Playwright
-│   │   └── factory.py          # Fábrica de conectores
-│   ├── notifications/
-│   │   ├── __init__.py
-│   │   ├── email_notifier.py
-│   │   ├── telegram_notifier.py
-│   │   └── notification_manager.py
-│   └── web/
-│       ├── __init__.py         # Módulo web
-│       ├── app.py              # Flask + APIs REST + Swagger
-│       ├── swagger_config.py   # Documentación OpenAPI
-│       ├── templates/
-│       │   └── index.html      # Dashboard con gráficos (v0.3.3)
-│       └── static/
-│           ├── style.css       # Dark mode moderno (v0.3.3)
-│           └── app.js          # Gráficos en tiempo real (v0.3.3)
-├── tests/
-│   ├── test_arbitrage.py       # 5 tests
-│   ├── test_integration.py     # 7 tests
-│   ├── test_bankroll.py        # 7 tests
-│   ├── test_value_betting.py   # 3 tests
-│   ├── test_dutching.py        # 4 tests
-│   ├── test_web_provider.py    # 5 tests
-│   ├── test_dashboard.py       # 5 tests
-│   ├── test_market_handlers.py # 5 tests
-│   ├── test_probability_model.py # 6 tests
-│   ├── test_migrations.py      # 5 tests
-│   ├── test_stress.py          # 6 tests de estrés
-│   ├── test_notifications.py   # 3 tests
-│   ├── test_tennis_handlers.py # 5 tests
-│   ├── test_basketball_handlers.py # 6 tests
-│   ├── test_swagger.py         # 5 tests (NUEVO - Sesión 21)
-│   └── test_logger.py          # 6 tests (NUEVO - Sesión 22)
-├── data/
-│   ├── sample_events.csv       # Datos de ejemplo (Fútbol)
-│   ├── team_stats.csv          # Datos históricos
-│   ├── tennis_events.csv       # Datos de Tenis
-│   └── basketball_events.csv   # Datos de Baloncesto
-├── main.py                     # CLI v0.3.3
-├── config.yaml                 # Configuración centralizada v0.3.3
-├── requirements.txt            # Dependencias v0.3.3
-├── Makefile                    # Comandos de desarrollo
-├── README.md                   # Documentación pública
-└── quantbet.db                 # SQLite (autogenerada)
+│   ├── __init__.py               ✅ v0.3.3
+│   ├── config_loader.py          ✅ CORREGIDO (Singleton)
+│   ├── logger.py                 ✅ CORREGIDO
+│   ├── logging/                  ✅ CREADO
+│   │   ├── __init__.py           ✅ CREADO
+│   │   └── handlers.py           ✅ CREADO
+│   ├── domain/entities.py        ✅ OK
+│   ├── storage/                  ⚠️ CONFLICTOS
+│   │   ├── __init__.py           ⚠️ Importa get_db que no existe
+│   │   ├── database.py           ⚠️ NO tiene función get_db()
+│   │   ├── repository.py         ⚠️ Importa get_db() que no existe
+│   │   └── migrations.py         ✅ OK
+│   ├── core/                     ✅ OK
+│   ├── connectors/               ✅ OK
+│   ├── notifications/            ✅ OK
+│   └── web/                      ✅ OK
+├── tests/                        ⚠️ 83 tests (algunos fallan por imports)
+├── main.py                       ✅ REEMPLAZADO (v0.3.3, ~420 líneas)
+├── config.yaml                   ✅ OK
+├── requirements.txt              ✅ OK (sin chart.js)
+└── quantbet.db                   (autogenerada)
 🔄 HISTORIAL DE SESIONES
 Sesión 10 - 30/07/2026 - Value Betting y Dutching
-Entregables: Implementación de ValueBetDetector, DutchingCalculator y tests.
+Entregables: ValueBetDetector, DutchingCalculator y tests.
 
 Sesión 11 - 31/07/2026 - Conector Web con Playwright
 Entregables: WebProvider, Factory, configuración web.
@@ -162,7 +94,7 @@ Sesión 16 - 31/07/2026 - Tests de Estrés (1000+ eventos)
 Entregables: test_stress.py con 6 pruebas de rendimiento.
 
 Sesión 17 - 31/07/2026 - CI/CD con GitHub Actions
-Entregables: 3 workflows, dependabot, pre-commit hooks, Makefile, README.
+Entregables: 3 workflows, dependabot, pre-commit hooks.
 
 Sesión 18 - 31/07/2026 - Sistema de Notificaciones
 Entregables: EmailNotifier, TelegramNotifier, NotificationManager.
@@ -182,12 +114,12 @@ src/web/app.py (REEMPLAZAR - v0.3.2)
 
 tests/test_swagger.py (CREAR - 5 tests)
 
-config.yaml (ACTUALIZAR - sección web)
+config.yaml (ACTUALIZAR)
 
-requirements.txt (ACTUALIZAR - flask-swagger-ui)
+requirements.txt (ACTUALIZAR)
 
-Sesión 22 - 01/08/2026 - UI/UX + Logs Avanzados
-Entregables:
+Sesión 22 - 01/08/2026 - UI/UX + Logs Avanzados + REPARACIONES
+Entregables (UI/UX + Logs):
 
 src/logging/handlers.py (CREAR)
 
@@ -195,76 +127,105 @@ tests/test_logger.py (CREAR - 6 tests)
 
 src/logger.py (REEMPLAZAR - v0.3.3)
 
-src/web/templates/index.html (REEMPLAZAR - con gráficos)
+src/web/templates/index.html (REEMPLAZAR)
 
-src/web/static/style.css (REEMPLAZAR - estilos modernos)
+src/web/static/style.css (REEMPLAZAR)
 
-src/web/static/app.js (REEMPLAZAR - gráficos en tiempo real)
+src/web/static/app.js (REEMPLAZAR)
 
 config.yaml (REEMPLAZAR - sección logs)
 
-requirements.txt (REEMPLAZAR - elasticsearch, python-json-logger, chart.js)
+Entregables (Reparaciones):
 
-📊 MÉTRICAS ACTUALES (FINAL)
+src/config_loader.py (REEMPLAZAR - corregido)
+
+main.py (REEMPLAZAR - versión completa ~420 líneas)
+
+src/storage/__init__.py (REEMPLAZAR - corregido)
+
+src/storage/database.py (REEMPLAZAR - con get_db())
+
+src/storage/repository.py (REEMPLAZAR - corregido)
+
+⚠️ ERRORES ACTUALES IDENTIFICADOS
+Error 1: Importación de get_db
+ImportError: cannot import name 'get_db' from 'src.storage.database'
+Causa: El archivo repository.py intenta importar get_db() pero database.py no la define.
+
+Solución propuesta: Añadir función get_db() al final de database.py:
+def get_db() -> sqlite3.Connection:
+    """Obtener conexión a la base de datos (función de conveniencia)"""
+    return Database().get_connection()
+Error 2: Importación de DatabaseManager
+ImportError: cannot import name 'DatabaseManager' from 'src.storage.database'
+ImportError: cannot import name 'DatabaseManager' from 'src.storage.database'
+🔧 PRÓXIMOS PASOS (PRIORIDAD ALTA - PRÓXIMA SESIÓN)
+Objetivo: Hacer que el proyecto sea FUNCIONAL y ejecutable.
+
+Tareas pendientes:
+Corregir src/storage/database.py:
+
+Añadir función get_db()
+
+Añadir alias DatabaseManager = Database
+
+Corregir src/storage/repository.py:
+
+Asegurar que usa get_db() correctamente
+
+Corregir src/storage/__init__.py:
+
+Exportar get_db y DatabaseManager
+
+Verificar todos los imports:
+
+main.py → debe importar Database correctamente
+
+src/web/app.py → debe importar Repository correctamente
+
+src/logger.py → debe importar handlers correctamente
+
+Ejecutar pruebas de verificación:
+python -c "from src.storage.database import Database, DatabaseManager, get_db; print('✅ OK')"
+python -c "from src.storage import Database, Repository; print('✅ OK')"
+python -c "from src.web.app import create_app; print('✅ OK')"
+python main.py --help
+python main.py --mode all --source csv --limit 5
+📊 MÉTRICAS ACTUALES
 Métrica	Valor
 Versión	0.3.3
-Tests totales	83 (+6)
-Mercados soportados	11
-Deportes soportados	3 (Fútbol, Tenis, Baloncesto)
-Estrategias	3 (Arbitraje, Value Betting, Dutching)
-Modelos de probabilidad	3 (Historical, Elo, Poisson)
-Conectores	2 (CSV, Web)
-Notificadores	2 (Email, Telegram)
-Workflows CI/CD	3
+Tests totales	83
+Archivos totales	61
 Líneas de código	~5,200
-Archivos totales	61 (+3)
-Endpoints documentados	6 (Swagger)
-Gráficos en tiempo real	2 (Estrategias + Tendencia)
-🚀 PRÓXIMOS PASOS (Opcionales / Futuro)
-Prioridad Media:
+Estado	⚠️ No funcional (errores de importación)
+📝 INSTRUCCIONES PARA PRÓXIMA SESIÓN
+Para la IA que inicie la siguiente sesión:
 
-Integración con bookmakers - Betfair API, Pinnacle API
+1. Escanea TODO el repositorio minuciosamente antes de proponer cambios.
 
-Soporte para más deportes - Béisbol, Hockey, etc.
+2. Prioridad ÚNICA: Corregir los errores de importación en src/storage/.
 
-Prioridad Baja:
+3. Archivos a REEMPLAZAR:
 
-Sistema de logs avanzado - Elasticsearch, Kibana (ya implementado)
+src/storage/database.py (añadir get_db y DatabaseManager)
 
-Mejoras UI/UX - Más interactividad (ya implementado)
+src/storage/repository.py (asegurar compatibilidad)
 
-📝 DIARIO - SESIÓN 22 (FINALIZADA)
-Fecha: 01/08/2026
-Tiempo: ~1 hora
-Estado: ✅ COMPLETO
+src/storage/__init__.py (exportar correctamente)
 
-Resumen:
+4. Comandos de verificación OBLIGATORIOS después de cada cambio:
+python -c "from src.storage.database import Database, DatabaseManager, get_db; print('✅ Database OK')"
+python -c "from src.storage import Database, Repository; print('✅ Storage OK')"
+python -c "from src.web.app import create_app; print('✅ Web OK')"
+python main.py --help
+5. NO proponer nuevas funcionalidades hasta que el proyecto sea FUNCIONAL.
 
-Implementado dashboard con gráficos en tiempo real (Chart.js)
-
-Sistema de logs estructurados con soporte para Elasticsearch
-
-Handlers personalizados para JSON, colores en consola y archivo
-
-6 nuevos tests para el sistema de logging
-
-Actualizada configuración con sección logs
-
-UI moderna con dark mode y actualización automática
-
-Total tests: 83/83 ✅
-
+6. Actualizar este diario al finalizar la sesión con el estado final.
 🔗 ENLACES ÚTILES
 Repositorio: https://github.com/viensa90/QuantBet
 
-Último commit: 9f3ba79 (Agosto 2, 2026)
+Dashboard: python main.py --serve (cuando funcione)
 
-Documentación QBMM: Carpeta /QBMM/ en el repositorio
+Tests: python -m pytest tests/ -v (cuando funcionen)
 
-Dashboard: make serve o python main.py --serve
-
-Swagger UI: http://localhost:5000/swagger
-
-Tests: make test (rápidos) o make stress (estrés)
-
-Fin del Diario de Proyecto - QuantBet v0.3.3 🚀
+Fin del Diario de Proyecto - QuantBet v0.3.3 (EN REPARACIÓN) 🔧

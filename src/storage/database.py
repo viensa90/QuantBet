@@ -1,138 +1,264 @@
 """
-src/storage/database.py
-Singleton para conexión SQLite optimizada
-Versión: 0.3.1
+Gestor de base de datos SQLite optimizado
+Versión: 0.3.3
 """
 
 import sqlite3
-import logging
-from contextlib import contextmanager
-from typing import Generator, Optional, Dict, Any
+import json
 from pathlib import Path
+from typing import Optional, Dict, Any, List, Union
+from datetime import datetime
+import threading
+import os
 
-logger = logging.getLogger(__name__)
+from ..config_loader import ConfigLoader
+
 
 class Database:
-    """Singleton para gestión de conexión SQLite con optimizaciones"""
+    """Singleton para gestión de base de datos SQLite optimizada"""
     
-    _instance: Optional['Database'] = None
-    _connection: Optional[sqlite3.Connection] = None
-    _db_path: str = "quantbet.db"
+    _instance = None
+    _lock = threading.Lock()
     
-    def __new__(cls, db_path: str = "quantbet.db"):
+    def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(Database, cls).__new__(cls)
-            cls._instance._db_path = db_path
-            cls._instance._initialize()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(Database, cls).__new__(cls)
+                    cls._instance._initialized = False
         return cls._instance
     
-    def _initialize(self):
-        """Inicializa la conexión con optimizaciones de rendimiento"""
-        if self._connection is None:
-            # Asegurar directorio
-            Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-            
-            self._connection = sqlite3.connect(
-                self._db_path,
-                timeout=10.0,  # Timeout para operaciones bloqueadas
-                check_same_thread=False,  # Permitir uso en múltiples hilos
-                isolation_level=None  # Modo autocommit
-            )
-            
-            # PRAGMAS de rendimiento
-            self._connection.execute("PRAGMA journal_mode=WAL;")
-            self._connection.execute("PRAGMA synchronous=NORMAL;")
-            self._connection.execute("PRAGMA cache_size=-20000;")  # 20MB
-            self._connection.execute("PRAGMA temp_store=MEMORY;")
-            self._connection.execute("PRAGMA foreign_keys=ON;")
-            
-            # Row factory para acceso por nombre de columna
-            self._connection.row_factory = sqlite3.Row
-            
-            logger.info(f"Base de datos SQLite inicializada: {self._db_path}")
-            logger.info("Optimizaciones aplicadas: WAL, NORMAL sync, cache 20MB")
-    
-    @contextmanager
-    def get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """Context manager para obtener conexión"""
-        if self._connection is None:
-            self._initialize()
+    def __init__(self):
+        if self._initialized:
+            return
         
-        try:
-            yield self._connection
-        except sqlite3.Error as e:
-            logger.error(f"Error en operación SQLite: {e}")
-            self._connection.rollback()
-            raise
-        finally:
-            # No cerramos la conexión, solo liberamos recursos si es necesario
-            pass
+        self.config = ConfigLoader().config.get("database", {})
+        self.db_path = self.config.get("path", "quantbet.db")
+        self._initialized = True
+        self._connection = None
+        self._initialize_database()
     
-    @contextmanager
-    def get_cursor(self) -> Generator[sqlite3.Cursor, None, None]:
-        """Context manager para obtener cursor"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            try:
-                yield cursor
-            finally:
-                cursor.close()
+    def _initialize_database(self):
+        """Inicializar base de datos con optimizaciones"""
+        # Crear directorio si no existe
+        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+        
+        # Conectar y optimizar
+        conn = self.get_connection()
+        
+        # Configuraciones de rendimiento
+        if self.config.get("wal_mode", True):
+            conn.execute("PRAGMA journal_mode=WAL")
+        
+        if self.config.get("cache_size", 10000):
+            conn.execute(f"PRAGMA cache_size={self.config.get('cache_size', 10000)}")
+        
+        conn.execute(f"PRAGMA synchronous={self.config.get('sync_mode', 'NORMAL')}")
+        conn.execute("PRAGMA temp_store=MEMORY")
+        conn.execute("PRAGMA mmap_size=30000000000")
+        
+        # Crear tablas
+        self._create_tables()
+        
+        # Crear índices
+        self._create_indexes()
     
-    def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
-        """Ejecuta SQL directamente con parámetros"""
-        with self.get_cursor() as cursor:
-            cursor.execute(sql, params)
-            return cursor
+    def _create_tables(self):
+        """Crear tablas si no existen"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Tabla: snapshots
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT NOT NULL,
+                event_count INTEGER,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Tabla: events
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_id INTEGER,
+                event_id TEXT NOT NULL,
+                sport TEXT NOT NULL,
+                market_type TEXT NOT NULL,
+                event_name TEXT NOT NULL,
+                odds TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (snapshot_id) REFERENCES snapshots(id)
+            )
+        """)
+        
+        # Tabla: opportunities
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS opportunities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_id INTEGER,
+                event_id TEXT NOT NULL,
+                sport TEXT NOT NULL,
+                market_type TEXT NOT NULL,
+                strategy TEXT NOT NULL,
+                profit_percent REAL,
+                odds TEXT NOT NULL,
+                metadata TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (snapshot_id) REFERENCES snapshots(id)
+            )
+        """)
+        
+        # Tabla: market_summary (para estadísticas)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS market_summary (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                market_type TEXT NOT NULL,
+                sport TEXT NOT NULL,
+                opportunity_count INTEGER,
+                avg_profit REAL,
+                max_profit REAL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        conn.commit()
     
-    def executemany(self, sql: str, params: list) -> sqlite3.Cursor:
-        """Ejecuta SQL con múltiples parámetros"""
-        with self.get_cursor() as cursor:
-            cursor.executemany(sql, params)
-            return cursor
+    def _create_indexes(self):
+        """Crear índices para optimizar queries"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Índice para búsquedas por timestamp
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_timestamp ON snapshots(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_opportunities_timestamp ON opportunities(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp)")
+        
+        # Índice para búsquedas por estrategia
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_opportunities_strategy ON opportunities(strategy)")
+        
+        # Índice para búsquedas por deporte/mercado
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_opportunities_sport ON opportunities(sport, market_type)")
+        
+        # Índice para búsquedas por snapshot
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_opportunities_snapshot ON opportunities(snapshot_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_events_snapshot ON events(snapshot_id)")
+        
+        conn.commit()
+    
+    def get_connection(self) -> sqlite3.Connection:
+        """Obtener conexión a la base de datos"""
+        if self._connection is None:
+            self._connection = sqlite3.connect(
+                self.db_path,
+                check_same_thread=False,
+                timeout=30
+            )
+            # Permitir acceso por nombre de columna
+            self._connection.row_factory = sqlite3.Row
+        return self._connection
     
     def close(self):
-        """Cierra la conexión (para testing/cleanup)"""
+        """Cerrar conexión a la base de datos"""
         if self._connection:
             self._connection.close()
             self._connection = None
-            logger.info("Conexión SQLite cerrada")
     
-    def get_connection_stats(self) -> Dict[str, Any]:
-        """Retorna estadísticas de la conexión"""
-        if not self._connection:
-            return {"status": "not_initialized"}
+    def execute(self, query: str, params: tuple = ()) -> sqlite3.Cursor:
+        """Ejecutar query y devolver cursor"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        conn.commit()
+        return cursor
+    
+    def fetch_all(self, query: str, params: tuple = ()) -> List[Dict]:
+        """Ejecutar query y devolver todos los resultados como dicts"""
+        cursor = self.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def fetch_one(self, query: str, params: tuple = ()) -> Optional[Dict]:
+        """Ejecutar query y devolver un resultado como dict"""
+        cursor = self.execute(query, params)
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    
+    def insert(self, table: str, data: Dict[str, Any]) -> int:
+        """Insertar registro y devolver ID"""
+        columns = ', '.join(data.keys())
+        placeholders = ', '.join(['?'] * len(data))
+        query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
         
-        cursor = self._connection.cursor()
+        cursor = self.execute(query, tuple(data.values()))
+        return cursor.lastrowid
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Obtener estadísticas de la base de datos"""
+        stats = {}
         
-        try:
-            # Obtener tamaño de la BD
-            cursor.execute("SELECT page_count * page_size FROM pragma_page_count, pragma_page_size;")
-            size_bytes = cursor.fetchone()[0]
-            
-            # Obtener número de tablas
-            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
-            table_count = cursor.fetchone()[0]
-            
-            # Estado de WAL
-            cursor.execute("PRAGMA journal_mode;")
-            journal_mode = cursor.fetchone()[0]
-            
-        except sqlite3.Error as e:
-            logger.warning(f"Error al obtener estadísticas: {e}")
-            return {"status": "error", "message": str(e)}
-        finally:
-            cursor.close()
+        # Total snapshots
+        result = self.fetch_one("SELECT COUNT(*) as count FROM snapshots")
+        stats["total_snapshots"] = result["count"] if result else 0
         
-        return {
-            "status": "connected",
-            "db_path": self._db_path,
-            "size_mb": round(size_bytes / (1024 * 1024), 2),
-            "table_count": table_count,
-            "journal_mode": journal_mode,
-            "cache_size": -20000  # 20MB
-        }
+        # Total oportunidades
+        result = self.fetch_one("SELECT COUNT(*) as count FROM opportunities")
+        stats["total_opportunities"] = result["count"] if result else 0
+        
+        # Por estrategia
+        results = self.fetch_all(
+            "SELECT strategy, COUNT(*) as count FROM opportunities GROUP BY strategy"
+        )
+        for row in results:
+            stats[f"{row['strategy']}_count"] = row["count"]
+        
+        # Tamaño de la base de datos
+        if os.path.exists(self.db_path):
+            stats["db_size_mb"] = os.path.getsize(self.db_path) / (1024 * 1024)
+        else:
+            stats["db_size_mb"] = 0
+        
+        return stats
+    
+    def cleanup_old_data(self, days: int) -> int:
+        """Eliminar datos antiguos y devolver número de registros eliminados"""
+        cutoff = datetime.now() - timedelta(days=days)
+        cutoff_str = cutoff.isoformat()
+        
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Eliminar oportunidades antiguas
+        cursor.execute(
+            "DELETE FROM opportunities WHERE timestamp < ?",
+            (cutoff_str,)
+        )
+        opp_count = cursor.rowcount
+        
+        # Eliminar eventos antiguos
+        cursor.execute(
+            "DELETE FROM events WHERE timestamp < ?",
+            (cutoff_str,)
+        )
+        event_count = cursor.rowcount
+        
+        # Eliminar snapshots antiguos
+        cursor.execute(
+            "DELETE FROM snapshots WHERE timestamp < ?",
+            (cutoff_str,)
+        )
+        snap_count = cursor.rowcount
+        
+        conn.commit()
+        
+        return opp_count + event_count + snap_count
+    
+    def vacuum(self):
+        """Optimizar la base de datos"""
+        conn = self.get_connection()
+        conn.execute("VACUUM")
+        conn.commit()
 
-# Función de utilidad para acceder a la instancia
-def get_db(db_path: str = "quantbet.db") -> Database:
-    """Retorna la instancia singleton de Database"""
-    return Database(db_path)
+
+# Para compatibilidad con código antiguo
+DatabaseManager = Database

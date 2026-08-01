@@ -15,7 +15,7 @@ from typing import List, Optional
 # Configurar path para imports absolutos
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.config_loader import config
+from src.config_loader import configLoader
 from src.logger import setup_logging
 from src.storage.database import get_db
 from src.storage.repository import Repository

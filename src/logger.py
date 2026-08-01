@@ -4,8 +4,6 @@ Versión: 0.3.3
 """
 
 import logging
-import logging.config
-import os
 import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -33,7 +31,10 @@ def setup_logger(
         Logger configurado
     """
     if config is None:
-        config = ConfigLoader().config.get("logs", {})
+        try:
+            config = ConfigLoader().config.get("logs", {})
+        except:
+            config = {}
     
     level_str = config.get("level", "INFO")
     level = getattr(logging, level_str.upper(), logging.INFO)
@@ -51,7 +52,9 @@ def setup_logger(
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(level)
         
-        if config.get("console", {}).get("color", False) and format_type == "text":
+        use_color = config.get("console", {}).get("color", False)
+        
+        if use_color and format_type == "text":
             console_formatter = ColoredConsoleFormatter('%(message)s')
         else:
             if format_type == "json":
@@ -73,7 +76,7 @@ def setup_logger(
         # Crear directorio si no existe
         Path(log_path).parent.mkdir(parents=True, exist_ok=True)
         
-        file_handler = logging.FileHandler(log_path)
+        file_handler = logging.FileHandler(log_path, encoding='utf-8')
         file_handler.setLevel(level)
         
         if format_type == "json":
@@ -123,3 +126,7 @@ def get_logger(name: str) -> logging.Logger:
         return setup_logger(name)
     
     return logger
+
+
+# Logger por defecto
+default_logger = setup_logger("quantbet")

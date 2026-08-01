@@ -6,8 +6,24 @@ Versión: 0.3.3
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
-from elasticsearch import Elasticsearch, exceptions
+from typing import Optional
+
+# Importar elasticsearch de forma segura
+try:
+    from elasticsearch import Elasticsearch, exceptions
+    ELASTICSEARCH_AVAILABLE = True
+except ImportError:
+    ELASTICSEARCH_AVAILABLE = False
+    # Crear clases dummy si no está disponible
+    class Elasticsearch:
+        def __init__(self, *args, **kwargs):
+            pass
+        def ping(self):
+            return False
+        def index(self, *args, **kwargs):
+            pass
+        def close(self):
+            pass
 
 
 class ElasticsearchHandler(logging.Handler):
@@ -24,19 +40,30 @@ class ElasticsearchHandler(logging.Handler):
         super().__init__(level)
         self.index = index
         
+        if not ELASTICSEARCH_AVAILABLE:
+            logging.warning("Elasticsearch no está instalado. El handler no funcionará.")
+            self.es = None
+            return
+        
         # Configurar cliente Elasticsearch
         es_kwargs = {"hosts": hosts}
         if username and password:
             es_kwargs["basic_auth"] = (username, password)
         
-        self.es = Elasticsearch(**es_kwargs)
-        
-        # Verificar conexión
-        if not self.es.ping():
-            logging.warning(f"No se pudo conectar a Elasticsearch en {hosts}")
+        try:
+            self.es = Elasticsearch(**es_kwargs)
+            # Verificar conexión
+            if not self.es.ping():
+                logging.warning(f"No se pudo conectar a Elasticsearch en {hosts}")
+        except Exception as e:
+            logging.warning(f"Error conectando a Elasticsearch: {e}")
+            self.es = None
     
     def emit(self, record: logging.LogRecord) -> None:
         """Enviar log a Elasticsearch"""
+        if self.es is None:
+            return
+        
         try:
             # Construir documento
             doc = {
@@ -48,9 +75,16 @@ class ElasticsearchHandler(logging.Handler):
                 "function": record.funcName,
                 "line": record.lineno,
                 "thread": record.threadName,
-                "process": record.process,
-                "extra": getattr(record, "extra", {})
+                "process": record.process
             }
+            
+            # Añadir extra si existe
+            if hasattr(record, "extra") and record.extra:
+                doc["extra"] = record.extra
+            
+            # Añadir excepción si existe
+            if record.exc_info:
+                doc["exception"] = self.formatException(record.exc_info)
             
             # Enviar a Elasticsearch
             self.es.index(
@@ -65,8 +99,11 @@ class ElasticsearchHandler(logging.Handler):
     
     def close(self) -> None:
         """Cerrar conexión con Elasticsearch"""
-        if hasattr(self, 'es'):
-            self.es.close()
+        if hasattr(self, 'es') and self.es is not None:
+            try:
+                self.es.close()
+            except:
+                pass
 
 
 class JSONFormatter(logging.Formatter):
@@ -87,7 +124,7 @@ class JSONFormatter(logging.Formatter):
         }
         
         # Añadir extra si existe
-        if hasattr(record, "extra"):
+        if hasattr(record, "extra") and record.extra:
             log_data["extra"] = record.extra
         
         # Añadir excepción si existe
@@ -114,6 +151,18 @@ class ColoredConsoleFormatter(logging.Formatter):
         color = self.COLORS.get(record.levelname, self.RESET)
         timestamp = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S")
         
-        # Formato: [timestamp] [LEVEL] logger - message
+        # Formatear mensaje base
         message = super().format(record)
+        
+        # En Windows, los colores ANSI no funcionan bien en CMD
+        import sys
+        if sys.platform == "win32":
+            # Intentar habilitar colores en Windows 10+
+            try:
+                import ctypes
+                kernel32 = ctypes.windll.kernel32
+                kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+            except:
+                pass
+        
         return f"{color}[{timestamp}] [{record.levelname}] {record.name} - {message}{self.RESET}"

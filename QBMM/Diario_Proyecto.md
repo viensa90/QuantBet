@@ -423,3 +423,15 @@ Progreso total: 8/11 tareas (73%) 🚀
 
 ¡Listo para la Sesión 18! 🎯
 
+🔗 ENLACES ÚTILES
+Repositorio: https://github.com/viensa90/QuantBet
+
+Último commit: 3d288d7 (Agosto 1, 2026)
+
+Documentación QBMM: Carpeta /QBMM/ en el repositorio
+
+Dashboard: make serve o python main.py --serve
+
+Tests: make test (rápidos) o make stress (estrés)
+
+Fin del Diario de Proyecto - QuantBet v0.3.1

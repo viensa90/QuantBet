@@ -1,0 +1,11 @@
+event_id,event_name,market_type,bookmaker,odds_data,timestamp,source
+bball_001,Lakers vs Celtics,Basketball Moneyline,Bet365,"{""Lakers"":1.80,""Celtics"":2.10}",2026-07-31T10:00:00,csv
+bball_001,Lakers vs Celtics,Basketball Moneyline,William Hill,"{""Lakers"":1.85,""Celtics"":2.05}",2026-07-31T10:00:00,csv
+bball_001,Lakers vs Celtics,Basketball Spread,Bet365,"{""Lakers -5.5"":1.90,""Celtics +5.5"":1.95}",2026-07-31T10:00:00,csv
+bball_001,Lakers vs Celtics,Basketball Total Points,Bet365,"{""Over 210.5"":1.85,""Under 210.5"":2.00}",2026-07-31T10:00:00,csv
+bball_001,Lakers vs Celtics,Basketball Quarter Winner,Bet365,"{""Lakers"":1.95,""Celtics"":2.05,""Draw"":15.00}",2026-07-31T10:00:00,csv
+bball_002,Heat vs Nuggets,Basketball Moneyline,Pinnacle,"{""Heat"":2.20,""Nuggets"":1.75}",2026-07-31T11:00:00,csv
+bball_002,Heat vs Nuggets,Basketball Moneyline,Bet365,"{""Heat"":2.25,""Nuggets"":1.72}",2026-07-31T11:00:00,csv
+bball_002,Heat vs Nuggets,Basketball Spread,Bet365,"{""Heat +3.5"":1.88,""Nuggets -3.5"":1.98}",2026-07-31T11:00:00,csv
+bball_003,Warriors vs Suns,Basketball Total Points,Pinnacle,"{""Over 215.5"":1.92,""Under 215.5"":1.92}",2026-07-31T12:00:00,csv
+bball_003,Warriors vs Suns,Basketball Total Points,Bet365,"{""Over 215.5"":1.88,""Under 215.5"":1.98}",2026-07-31T12:00:00,csv

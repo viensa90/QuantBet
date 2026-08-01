@@ -1,7 +1,7 @@
 """
 src/core/market_handlers.py
 Handlers específicos por mercado (Strategy Pattern)
-Versión: 0.3.1 (Soporte para Tenis)
+Versión: 0.3.1 (Soporte para Tenis y Baloncesto)
 """
 
 import logging
@@ -39,7 +39,7 @@ class BaseMarketHandler(ABC):
         return True
 
 class Handler1X2(BaseMarketHandler):
-    """Handler para mercado 1X2 (Fútbol, Tenis, etc.)"""
+    """Handler para mercado 1X2 (Fútbol, Baloncesto Moneyline, etc.)"""
     
     def get_market_type(self) -> str:
         return "1X2"
@@ -196,13 +196,10 @@ class HandlerDoubleChance(BaseMarketHandler):
     def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
         return None
 
-# === NUEVOS HANDLERS PARA TENIS ===
+# === HANDLERS PARA TENIS ===
 
 class TennisMatchWinner(BaseMarketHandler):
-    """
-    Handler para Winner del partido (Tenis)
-    Mercado: 1X2 pero con 2 resultados (Jugador1, Jugador2)
-    """
+    """Handler para Winner del partido (Tenis)"""
     
     def get_market_type(self) -> str:
         return "Tennis Winner"
@@ -213,11 +210,9 @@ class TennisMatchWinner(BaseMarketHandler):
         if not self.validate_odds(snapshot.odds_data):
             return opportunities
         
-        # Tenis tiene 2 resultados principales
         if len(snapshot.odds_data) < 2:
             return opportunities
         
-        # Calcular overround
         overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
         
         if overround < 1.0:
@@ -241,28 +236,22 @@ class TennisMatchWinner(BaseMarketHandler):
         return opportunities
     
     def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
-        """Calcula odds justas para tenis (2 resultados)"""
         if not self.validate_odds(snapshot.odds_data):
             return None
         
-        # Estimación simple: basado en odds implícitos
         total_implied = sum(1.0 / odd for odd in snapshot.odds_data.values())
         if total_implied <= 0:
             return None
         
         fair_odds = {}
         for outcome, odd in snapshot.odds_data.items():
-            # Ajustar para eliminar margen del bookmaker
             fair_prob = (1.0 / odd) / total_implied
             fair_odds[outcome] = 1.0 / fair_prob
         
         return fair_odds
 
 class TennisSetHandicap(BaseMarketHandler):
-    """
-    Handler para Handicap en Sets (Tenis)
-    Mercado: Handicap en sets (ej: -1.5, +1.5)
-    """
+    """Handler para Handicap en Sets (Tenis)"""
     
     def get_market_type(self) -> str:
         return "Tennis Set Handicap"
@@ -302,10 +291,7 @@ class TennisSetHandicap(BaseMarketHandler):
         return None
 
 class TennisTotalGames(BaseMarketHandler):
-    """
-    Handler para Total de Games (Tenis)
-    Mercado: Over/Under en games (ej: Over 22.5, Under 22.5)
-    """
+    """Handler para Total de Games (Tenis)"""
     
     def get_market_type(self) -> str:
         return "Tennis Total Games"
@@ -344,18 +330,212 @@ class TennisTotalGames(BaseMarketHandler):
     def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
         return None
 
+# === NUEVOS HANDLERS PARA BALONCESTO ===
+
+class BasketballMoneyline(BaseMarketHandler):
+    """
+    Handler para Moneyline (Baloncesto)
+    Similar a 1X2 pero con 2 resultados (Local, Visitante)
+    """
+    
+    def get_market_type(self) -> str:
+        return "Basketball Moneyline"
+    
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
+        opportunities = []
+        
+        if not self.validate_odds(snapshot.odds_data):
+            return opportunities
+        
+        if len(snapshot.odds_data) < 2:
+            return opportunities
+        
+        overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        
+        if overround < 1.0:
+            profit_percent = (1.0 / overround - 1.0) * 100
+            
+            stakes = {}
+            for outcome, odd in snapshot.odds_data.items():
+                stakes[outcome] = 1.0 / odd / overround
+            
+            opportunity = Opportunity(
+                event_id=snapshot.event_id,
+                market_type=self.get_market_type(),
+                profit_percent=profit_percent,
+                odds=snapshot.odds_data,
+                stakes=stakes,
+                source=snapshot.source,
+                timestamp=snapshot.timestamp
+            )
+            opportunities.append(opportunity)
+        
+        return opportunities
+    
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        if not self.validate_odds(snapshot.odds_data):
+            return None
+        
+        total_implied = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        if total_implied <= 0:
+            return None
+        
+        fair_odds = {}
+        for outcome, odd in snapshot.odds_data.items():
+            fair_prob = (1.0 / odd) / total_implied
+            fair_odds[outcome] = 1.0 / fair_prob
+        
+        return fair_odds
+
+class BasketballSpread(BaseMarketHandler):
+    """
+    Handler para Spread (Baloncesto)
+    Mercado: Handicap en puntos (ej: -5.5, +5.5)
+    """
+    
+    def get_market_type(self) -> str:
+        return "Basketball Spread"
+    
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
+        opportunities = []
+        
+        if not self.validate_odds(snapshot.odds_data):
+            return opportunities
+        
+        if len(snapshot.odds_data) < 2:
+            return opportunities
+        
+        overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        
+        if overround < 1.0:
+            profit_percent = (1.0 / overround - 1.0) * 100
+            
+            stakes = {}
+            for outcome, odd in snapshot.odds_data.items():
+                stakes[outcome] = 1.0 / odd / overround
+            
+            opportunity = Opportunity(
+                event_id=snapshot.event_id,
+                market_type=self.get_market_type(),
+                profit_percent=profit_percent,
+                odds=snapshot.odds_data,
+                stakes=stakes,
+                source=snapshot.source,
+                timestamp=snapshot.timestamp
+            )
+            opportunities.append(opportunity)
+        
+        return opportunities
+    
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        return None
+
+class BasketballTotalPoints(BaseMarketHandler):
+    """
+    Handler para Total Points (Baloncesto)
+    Mercado: Over/Under en puntos (ej: Over 210.5, Under 210.5)
+    """
+    
+    def get_market_type(self) -> str:
+        return "Basketball Total Points"
+    
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
+        opportunities = []
+        
+        if not self.validate_odds(snapshot.odds_data):
+            return opportunities
+        
+        if len(snapshot.odds_data) < 2:
+            return opportunities
+        
+        overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        
+        if overround < 1.0:
+            profit_percent = (1.0 / overround - 1.0) * 100
+            
+            stakes = {}
+            for outcome, odd in snapshot.odds_data.items():
+                stakes[outcome] = 1.0 / odd / overround
+            
+            opportunity = Opportunity(
+                event_id=snapshot.event_id,
+                market_type=self.get_market_type(),
+                profit_percent=profit_percent,
+                odds=snapshot.odds_data,
+                stakes=stakes,
+                source=snapshot.source,
+                timestamp=snapshot.timestamp
+            )
+            opportunities.append(opportunity)
+        
+        return opportunities
+    
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        return None
+
+class BasketballQuarterWinner(BaseMarketHandler):
+    """
+    Handler para Ganador del Cuarto (Baloncesto)
+    Mercado: 1X2 por cuarto
+    """
+    
+    def get_market_type(self) -> str:
+        return "Basketball Quarter Winner"
+    
+    def find_opportunities(self, snapshot: Snapshot) -> List[Opportunity]:
+        opportunities = []
+        
+        if not self.validate_odds(snapshot.odds_data):
+            return opportunities
+        
+        if len(snapshot.odds_data) < 3:
+            return opportunities
+        
+        overround = sum(1.0 / odd for odd in snapshot.odds_data.values())
+        
+        if overround < 1.0:
+            profit_percent = (1.0 / overround - 1.0) * 100
+            
+            stakes = {}
+            for outcome, odd in snapshot.odds_data.items():
+                stakes[outcome] = 1.0 / odd / overround
+            
+            opportunity = Opportunity(
+                event_id=snapshot.event_id,
+                market_type=self.get_market_type(),
+                profit_percent=profit_percent,
+                odds=snapshot.odds_data,
+                stakes=stakes,
+                source=snapshot.source,
+                timestamp=snapshot.timestamp
+            )
+            opportunities.append(opportunity)
+        
+        return opportunities
+    
+    def calculate_fair_odds(self, snapshot: Snapshot) -> Optional[Dict[str, float]]:
+        return None
+
 class MarketHandlerFactory:
     """Fábrica de handlers de mercado"""
     
     _handlers = {
+        # Mercados existentes
         "1X2": Handler1X2,
         "Over/Under": HandlerOverUnder,
         "Asian Handicap": HandlerAsianHandicap,
         "Double Chance": HandlerDoubleChance,
-        # Nuevos handlers para Tenis
+        
+        # Mercados de Tenis
         "Tennis Winner": TennisMatchWinner,
         "Tennis Set Handicap": TennisSetHandicap,
         "Tennis Total Games": TennisTotalGames,
+        
+        # Mercados de Baloncesto (NUEVOS)
+        "Basketball Moneyline": BasketballMoneyline,
+        "Basketball Spread": BasketballSpread,
+        "Basketball Total Points": BasketballTotalPoints,
+        "Basketball Quarter Winner": BasketballQuarterWinner,
     }
     
     @classmethod

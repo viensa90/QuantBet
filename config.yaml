@@ -1,5 +1,5 @@
 # QuantBet - Configuración Centralizada
-# Versión: 0.3.1 (Soporte para Tenis)
+# Versión: 0.3.1 (Soporte para Tenis y Baloncesto)
 
 version: "0.3.1"
 
@@ -9,20 +9,35 @@ strategies:
   value_betting: true
   dutching: true
 
-# Mercados soportados (incluyendo Tenis)
+# Mercados soportados (incluyendo Tenis y Baloncesto)
 markets:
   enabled:
+    # Mercados base
     - "1X2"
     - "Over/Under"
     - "Asian Handicap"
     - "Double Chance"
+    # Mercados de Tenis
     - "Tennis Winner"
     - "Tennis Set Handicap"
     - "Tennis Total Games"
+    # Mercados de Baloncesto (NUEVOS)
+    - "Basketball Moneyline"
+    - "Basketball Spread"
+    - "Basketball Total Points"
+    - "Basketball Quarter Winner"
+  
+  # Líneas configurables por deporte
   over_under_lines: [0.5, 1.5, 2.5, 3.5]
   asian_handicaps: [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0]
+  
+  # Líneas de Tenis
   tennis_set_handicaps: [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]
   tennis_total_games_lines: [18.5, 19.5, 20.5, 21.5, 22.5, 23.5, 24.5]
+  
+  # Líneas de Baloncesto (NUEVAS)
+  basketball_spreads: [-15.5, -12.5, -10.5, -8.5, -6.5, -4.5, -3.5, -2.5, -1.5, 0.0, 1.5, 2.5, 3.5, 4.5, 6.5, 8.5, 10.5, 12.5, 15.5]
+  basketball_total_lines: [180.5, 190.5, 200.5, 210.5, 215.5, 220.5, 225.5, 230.5, 240.5]
 
 # Umbrales y parámetros
 thresholds:

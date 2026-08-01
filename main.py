@@ -1,365 +1,367 @@
 #!/usr/bin/env python3
 """
 QuantBet - Sistema de Arbitraje Deportivo Automatizado
-CLI principal con soporte multi-estrategia, multi-conector y dashboard web.
+CLI principal con soporte para múltiples estrategias y modos
+Versión: 0.3.1 (Optimización de rendimiento)
 """
 
-import argparse
 import sys
-from typing import Optional
+import argparse
+import logging
+from pathlib import Path
+from datetime import datetime
+from typing import List, Optional
 
-from src.config_loader import ConfigLoader
-from src.logger import setup_logging, get_logger
-from src.storage.database import Database
+# Configurar path para imports absolutos
+sys.path.insert(0, str(Path(__file__).parent))
+
+from src.config_loader import config
+from src.logger import setup_logging
+from src.storage.database import get_db
 from src.storage.repository import Repository
-from src.connectors.factory import ConnectorFactory
+from src.storage.migrations import apply_migrations
+from src.connectors.factory import ProviderFactory
 from src.core.arbitrage import ArbitrageEngine
-from src.core.scorer import Scorer
-from src.core.bankroll import BankrollManager
+from src.core.scorer import OpportunityScorer
 from src.core.value_betting import ValueBetDetector
 from src.core.dutching import DutchingCalculator
-from src.domain.entities import MarketType
+from src.core.probability_model import ProbabilityModelFactory
+from src.domain.entities import Decision, Opportunity, Snapshot
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
-
-def parse_markets(markets_str: Optional[str]) -> list:
-    """
-    Parsea lista de mercados desde argumento CLI.
+class QuantBetRunner:
+    """Orquestador principal del sistema QuantBet"""
     
-    Args:
-        markets_str: String con mercados separados por coma
+    def __init__(self, source: str = "csv", markets: Optional[List[str]] = None):
+        self.source = source
+        self.markets = markets or config.get('markets', {}).get('enabled', ['1X2'])
+        self.repo = Repository()
+        self.scorer = OpportunityScorer()
         
-    Returns:
-        Lista de MarketType
-    """
-    if not markets_str:
-        return None
+        # Inicializar componentes según configuración
+        self.arbitrage_engine = ArbitrageEngine()
+        self.value_detector = ValueBetDetector()
+        self.dutching_calculator = DutchingCalculator()
+        
+        # Modelo de probabilidad (para value betting)
+        model_type = config.get('probability_model', {}).get('type', 'historical')
+        self.probability_model = ProbabilityModelFactory.get_model(model_type)
+        
+        logger.info(f"QuantBetRunner inicializado con fuente: {source}, mercados: {markets}")
     
-    market_map = {
-        "1X2": MarketType.MERCADO_1X2,
-        "OVER_UNDER": MarketType.OVER_UNDER,
-        "ASIAN_HANDICAP": MarketType.ASIAN_HANDICAP,
-        "DOUBLE_CHANCE": MarketType.DOUBLE_CHANCE,
-    }
+    def fetch_data(self) -> List[Snapshot]:
+        """Obtiene datos del conector configurado"""
+        provider = ProviderFactory.get_provider(self.source)
+        snapshots = provider.fetch_snapshots()
+        
+        if not snapshots:
+            logger.warning("No se obtuvieron datos del proveedor")
+            return []
+        
+        logger.info(f"Obtenidos {len(snapshots)} snapshots")
+        return snapshots
     
-    markets = []
-    for m in markets_str.split(','):
-        m = m.strip().upper()
-        if m in market_map:
-            markets.append(market_map[m])
-        else:
-            logger.warning("Mercado no reconocido: %s", m)
+    def save_snapshots(self, snapshots: List[Snapshot]) -> int:
+        """Guarda snapshots en lote y actualiza resumen"""
+        if not snapshots:
+            return 0
+        
+        # Guardar en lote
+        count = self.repo.save_snapshots_batch(snapshots)
+        logger.info(f"Guardados {count} snapshots en lote")
+        
+        return count
     
-    return markets if markets else None
-
-
-def run_arbitrage(
-    connector, 
-    repository: Repository,
-    bankroll: BankrollManager,
-    config: dict,
-    enabled_markets: Optional[list] = None
-) -> None:
-    """Ejecuta pipeline de arbitraje."""
-    logger.info("=== EJECUTANDO ARBITRAJE ===")
-    
-    # 1. Obtener snapshots
-    snapshots = connector.fetch_snapshots()
-    logger.info("Snapshots obtenidos: %d", len(snapshots))
-    
-    if not snapshots:
-        logger.warning("No hay snapshots para procesar")
-        return
-    
-    # 2. Guardar snapshots
-    for snapshot in snapshots:
-        repository.save_snapshot(snapshot)
-    logger.info("Snapshots guardados: %d", len(snapshots))
-    
-    # 3. Detectar oportunidades
-    engine = ArbitrageEngine(enabled_markets=enabled_markets)
-    opportunities = engine.detect_opportunities(snapshots)
-    
-    if not opportunities:
-        logger.info("No se detectaron oportunidades de arbitraje")
-        return
-    
-    logger.info("Oportunidades detectadas: %d", len(opportunities))
-    
-    # 4. Puntuación
-    scorer = Scorer()
-    threshold = config.get('decision', {}).get('min_arbitrage_percent', 2.0)
-    scored_ops = scorer.score_opportunities(opportunities, threshold)
-    
-    scored_ops = [op for op in scored_ops if op.score >= threshold]
-    logger.info("Oportunidades con score >= %s%%: %d", threshold, len(scored_ops))
-    
-    # 5. Validar bankroll
-    for op in scored_ops:
-        if bankroll.can_bet(op):
-            logger.info("OPORTUNIDAD VALIDADA: %s | Mercado: %s | Score: %.2f%% | Stake sugerido: %.2f %s",
-                       op.opportunity.event_id,
-                       op.opportunity.market_type.value,
-                       op.score, 
-                       bankroll.calculate_stake(op) or 0,
-                       config.get('bankroll', {}).get('currency', 'EUR'))
+    def run_arbitrage(self, snapshots: List[Snapshot]) -> List[Decision]:
+        """Ejecuta el motor de arbitraje"""
+        decisions = []
+        
+        for snapshot in snapshots:
+            # Filtrar por mercado si está especificado
+            if snapshot.market_type not in self.markets:
+                continue
             
-            # Guardar decisión
-            repository.save_decision(
-                op.opportunity.event_id,
-                op.opportunity.source,
-                "ARBITRAGE",
-                True,
-                op.score,
-                bankroll.calculate_stake(op) or 0,
-                {
-                    "arbitrage_percent": op.opportunity.arbitrage_percent,
-                    "market_type": op.opportunity.market_type.value,
-                    "metadata": op.opportunity.metadata
-                }
-            )
-        else:
-            logger.debug("Oportunidad rechazada por bankroll: %s", op.opportunity.event_id)
-    
-    logger.info("=== ARBITRAJE COMPLETADO ===")
-
-
-def run_value_betting(
-    connector,
-    repository: Repository,
-    bankroll: BankrollManager,
-    config: dict
-) -> None:
-    """Ejecuta pipeline de value betting."""
-    logger.info("=== EJECUTANDO VALUE BETTING ===")
-    
-    snapshots = connector.fetch_snapshots()
-    if not snapshots:
-        logger.warning("No hay snapshots para procesar")
-        return
-    
-    detector = ValueBetDetector(config.get('fair_probabilities', {}))
-    value_bets = detector.detect_value_bets(snapshots, config.get('decision', {}).get('min_value_threshold', 0.05))
-    
-    if not value_bets:
-        logger.info("No se detectaron value bets")
-        return
-    
-    logger.info("Value bets detectados: %d", len(value_bets))
-    
-    for vb in value_bets:
-        logger.info("VALUE BET: %s | Mercado: %s | Valor: %.2f%%",
-                   vb.event_id, vb.market_type.value, vb.value_percent * 100)
-        # Guardar decisión
-        repository.save_decision(
-            vb.event_id,
-            vb.source,
-            "VALUE_BET",
-            True,
-            vb.value_percent,
-            bankroll.calculate_stake_for_value(vb, config.get('bankroll', {})),
-            {
-                "fair_probability": vb.fair_probability,
-                "actual_odds": float(vb.actual_odds),
-                "market_type": vb.market_type.value
-            }
-        )
-    
-    logger.info("=== VALUE BETTING COMPLETADO ===")
-
-
-def run_dutching(
-    connector,
-    repository: Repository,
-    bankroll: BankrollManager,
-    config: dict
-) -> None:
-    """Ejecuta pipeline de dutching."""
-    logger.info("=== EJECUTANDO DUTCHING ===")
-    
-    snapshots = connector.fetch_snapshots()
-    if not snapshots:
-        logger.warning("No hay snapshots para procesar")
-        return
-    
-    calculator = DutchingCalculator()
-    dutching_ops = calculator.calculate_dutching(snapshots)
-    
-    if not dutching_ops:
-        logger.info("No se detectaron oportunidades de dutching")
-        return
-    
-    logger.info("Oportunidades de dutching detectadas: %d", len(dutching_ops))
-    
-    # Procesar cada oportunidad de dutching
-    for event_id, dutch in dutching_ops.items():
-        logger.info("DUTCHING: %s | Cobertura: %.2f%% | Stake total: %.2f",
-                   event_id, dutch.coverage_percent * 100, dutch.total_stake)
+            opportunities = self.arbitrage_engine.find_opportunities(snapshot)
+            
+            for opp in opportunities:
+                score = self.scorer.score_opportunity(opp)
+                decision = Decision(
+                    event_id=opp.event_id,
+                    strategy="arbitrage",
+                    opportunity_data=opp.to_dict(),
+                    decision_data={
+                        "score": score,
+                        "profit_percent": opp.profit_percent,
+                        "market_type": opp.market_type
+                    },
+                    opportunity_score=score,
+                    timestamp=datetime.now(),
+                    executed=False
+                )
+                decisions.append(decision)
+                
+                logger.debug(f"Arbitraje: {opp.event_id} - Score: {score:.2f} - Profit: {opp.profit_percent:.2f}%")
         
-        # Guardar decisión
-        repository.save_decision(
-            event_id,
-            "DUTCHING",
-            "DUTCHING",
-            True,
-            dutch.coverage_percent,
-            dutch.total_stake,
-            {
-                "stakes": dutch.stakes,
-                "expected_profit": float(dutch.expected_profit),
-                "market_type": dutch.market_type.value
-            }
-        )
+        if decisions:
+            self.repo.save_decisions_batch(decisions)
+            self._update_market_summary(decisions)
+            logger.info(f"Guardadas {len(decisions)} decisiones de arbitraje")
+        
+        return decisions
     
-    logger.info("=== DUTCHING COMPLETADO ===")
-
-
-def run_all(connector, repository: Repository, bankroll: BankrollManager, config: dict, enabled_markets: Optional[list] = None) -> None:
-    """Ejecuta todas las estrategias."""
-    logger.info("=== EJECUTANDO TODAS LAS ESTRATEGIAS ===")
-    run_arbitrage(connector, repository, bankroll, config, enabled_markets)
-    run_value_betting(connector, repository, bankroll, config)
-    run_dutching(connector, repository, bankroll, config)
-    logger.info("=== TODAS LAS ESTRATEGIAS COMPLETADAS ===")
-
-
-def serve_dashboard(config_path: str, host: str = "127.0.0.1", port: int = 5000) -> None:
-    """
-    Inicia el servidor web del dashboard.
+    def run_value_betting(self, snapshots: List[Snapshot]) -> List[Decision]:
+        """Ejecuta el detector de value betting con modelo de probabilidad"""
+        decisions = []
+        
+        for snapshot in snapshots:
+            if snapshot.market_type not in self.markets:
+                continue
+            
+            # Usar el modelo de probabilidad para calcular fair odds
+            fair_prob = self.probability_model.predict(snapshot)
+            if fair_prob is None:
+                continue
+            
+            # Detectar value bets
+            value_bets = self.value_detector.detect(snapshot, fair_prob)
+            
+            for bet in value_bets:
+                decision = Decision(
+                    event_id=snapshot.event_id,
+                    strategy="value_betting",
+                    opportunity_data={
+                        "market_type": snapshot.market_type,
+                        "selection": bet.get("selection", "unknown"),
+                        "odds": bet.get("odds", 0.0),
+                        "implied_prob": bet.get("implied_prob", 0.0),
+                        "fair_prob": bet.get("fair_prob", 0.0),
+                        "model": self.probability_model.__class__.__name__
+                    },
+                    decision_data={
+                        "value": bet.get("value", 0.0),
+                        "edge_percent": bet.get("edge_percent", 0.0)
+                    },
+                    opportunity_score=bet.get("score", 0.0),
+                    timestamp=datetime.now(),
+                    executed=False
+                )
+                decisions.append(decision)
+                
+                logger.debug(f"Value Bet: {bet.get('selection')} - Edge: {bet.get('edge_percent', 0):.2f}%")
+        
+        if decisions:
+            self.repo.save_decisions_batch(decisions)
+            self._update_market_summary(decisions)
+            logger.info(f"Guardadas {len(decisions)} decisiones de value betting")
+        
+        return decisions
     
-    Args:
-        config_path: Ruta al archivo de configuración
-        host: Host donde escuchar
-        port: Puerto donde escuchar
-    """
-    from src.web.app import create_app
+    def run_dutching(self, snapshots: List[Snapshot]) -> List[Decision]:
+        """Ejecuta el calculador de dutching"""
+        decisions = []
+        
+        for snapshot in snapshots:
+            if snapshot.market_type not in self.markets:
+                continue
+            
+            # Extraer odds del snapshot
+            odds_list = list(snapshot.odds_data.values()) if snapshot.odds_data else []
+            
+            # Necesitamos al menos 2 odds para dutching
+            if len(odds_list) < 2:
+                continue
+            
+            dutching_results = self.dutching_calculator.calculate_stakes(odds_list)
+            
+            if dutching_results and dutching_results.get("stakes"):
+                decision = Decision(
+                    event_id=snapshot.event_id,
+                    strategy="dutching",
+                    opportunity_data={
+                        "market_type": snapshot.market_type,
+                        "odds": odds_list,
+                        "total_stake": dutching_results.get("total_stake", 0.0),
+                        "selections": list(snapshot.odds_data.keys())
+                    },
+                    decision_data={
+                        "stakes": dutching_results.get("stakes", []),
+                        "guaranteed_return": dutching_results.get("guaranteed_return", 0.0),
+                        "profit_margin": dutching_results.get("profit_margin", 0.0)
+                    },
+                    opportunity_score=dutching_results.get("score", 50.0),
+                    timestamp=datetime.now(),
+                    executed=False
+                )
+                decisions.append(decision)
+                
+                logger.debug(f"Dutching: {snapshot.event_id} - Return: {dutching_results.get('guaranteed_return', 0):.2f}")
+        
+        if decisions:
+            self.repo.save_decisions_batch(decisions)
+            self._update_market_summary(decisions)
+            logger.info(f"Guardadas {len(decisions)} decisiones de dutching")
+        
+        return decisions
     
-    logger.info("Iniciando dashboard en http://%s:%d", host, port)
-    app = create_app(config_path)
-    app.run(host=host, port=port, debug=True)
+    def _update_market_summary(self, decisions: List[Decision]):
+        """Actualiza el resumen de mercado para el dashboard"""
+        for decision in decisions:
+            # Extraer información de la decisión
+            opp_data = decision.opportunity_data
+            market_type = opp_data.get('market_type', 'unknown')
+            
+            # Obtener o calcular métricas
+            best_opp = decision.opportunity_score
+            total_opps = 1  # Por ahora 1, se puede mejorar con agregación
+            
+            self.repo.update_market_summary(
+                event_id=decision.event_id,
+                market_type=market_type,
+                best_opportunity=best_opp,
+                total_opportunities=total_opps,
+                avg_score=best_opp
+            )
+    
+    def run_all(self, snapshots: List[Snapshot]) -> dict:
+        """Ejecuta todas las estrategias y retorna resumen"""
+        results = {
+            "arbitrage": len(self.run_arbitrage(snapshots)),
+            "value_betting": len(self.run_value_betting(snapshots)),
+            "dutching": len(self.run_dutching(snapshots)),
+            "total_snapshots": len(snapshots),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        logger.info(f"Pipeline completo finalizado: {results}")
+        return results
+    
+    def run_pipeline(self, mode: str = "all") -> dict:
+        """Ejecuta el pipeline completo según modo"""
+        # 1. Obtener datos
+        snapshots = self.fetch_data()
+        if not snapshots:
+            return {"error": "No se obtuvieron datos", "snapshots": 0}
+        
+        # 2. Guardar snapshots en lote
+        self.save_snapshots(snapshots)
+        
+        # 3. Ejecutar estrategias según modo
+        if mode == "arbitrage":
+            decisions = self.run_arbitrage(snapshots)
+            return {"mode": "arbitrage", "decisions": len(decisions), "snapshots": len(snapshots)}
+        elif mode == "value":
+            decisions = self.run_value_betting(snapshots)
+            return {"mode": "value_betting", "decisions": len(decisions), "snapshots": len(snapshots)}
+        elif mode == "dutching":
+            decisions = self.run_dutching(snapshots)
+            return {"mode": "dutching", "decisions": len(decisions), "snapshots": len(snapshots)}
+        else:  # all
+            return self.run_all(snapshots)
 
+def serve_dashboard():
+    """Inicia el servidor web del dashboard"""
+    logger.info("Iniciando dashboard web...")
+    
+    try:
+        from src.web.app import app, init_app
+        init_app()
+        
+        host = config.get('web', {}).get('host', '0.0.0.0')
+        port = config.get('web', {}).get('port', 5000)
+        debug = config.get('web', {}).get('debug', True)
+        
+        logger.info(f"Dashboard disponible en http://{host}:{port}")
+        app.run(host=host, port=port, debug=debug)
+    
+    except ImportError as e:
+        logger.error(f"Error al iniciar dashboard: {e}")
+        logger.error("Asegúrate de que Flask y Jinja2 estén instalados")
+        sys.exit(1)
 
 def main():
-    """Punto de entrada principal."""
+    """Punto de entrada principal"""
+    # Configurar logging
+    setup_logging()
+    
+    # Aplicar migraciones al inicio (Sesión 15)
+    logger.info("Verificando migraciones de base de datos...")
+    try:
+        apply_migrations()
+        logger.info("Migraciones aplicadas correctamente")
+    except Exception as e:
+        logger.error(f"Error al aplicar migraciones: {e}")
+        # Continuar de todas formas, puede que la BD ya esté actualizada
+    
     parser = argparse.ArgumentParser(
-        description="QuantBet - Sistema de Arbitraje Deportivo Automatizado"
+        description='QuantBet - Sistema de Arbitraje Deportivo Automatizado v0.3.1',
+        epilog='Ejemplos:\n  python main.py --mode arbitrage --source csv\n  python main.py --serve\n  python main.py --cleanup 30'
     )
-    parser.add_argument(
-        "--mode",
-        choices=["arbitrage", "value", "dutching", "all"],
-        default="all",
-        help="Estrategia a ejecutar (por defecto: all)"
-    )
-    parser.add_argument(
-        "--source",
-        choices=["csv", "web"],
-        default=None,
-        help="Fuente de datos (csv o web). Si no se especifica, usa config.yaml"
-    )
-    parser.add_argument(
-        "--markets",
-        help="Mercados a procesar (separados por coma). Ej: '1X2,OVER_UNDER'"
-    )
-    parser.add_argument(
-        "--config",
-        default="config.yaml",
-        help="Ruta al archivo de configuración"
-    )
-    parser.add_argument(
-        "--serve",
-        action="store_true",
-        help="Iniciar el dashboard web en lugar de ejecutar estrategias"
-    )
-    parser.add_argument(
-        "--host",
-        default="127.0.0.1",
-        help="Host para el dashboard (por defecto: 127.0.0.1)"
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=5000,
-        help="Puerto para el dashboard (por defecto: 5000)"
-    )
+    
+    parser.add_argument('--mode', 
+                       choices=['arbitrage', 'value', 'dutching', 'all'], 
+                       default='all',
+                       help='Modo de ejecución (default: all)')
+    
+    parser.add_argument('--source', 
+                       choices=['csv', 'web'], 
+                       default='csv',
+                       help='Fuente de datos (default: csv)')
+    
+    parser.add_argument('--markets', 
+                       nargs='+',
+                       help='Mercados a analizar (ej: "1X2" "Over/Under")')
+    
+    parser.add_argument('--serve', 
+                       action='store_true',
+                       help='Iniciar dashboard web en lugar de ejecutar pipeline')
+    
+    parser.add_argument('--cleanup', 
+                       type=int, 
+                       default=0,
+                       help='Limpiar datos antiguos (días a conservar)')
+    
+    parser.add_argument('--stats', 
+                       action='store_true',
+                       help='Mostrar estadísticas de la base de datos y salir')
     
     args = parser.parse_args()
     
-    # Cargar configuración
-    config_loader = ConfigLoader(args.config)
-    config = config_loader.load()
-    
-    # Configurar logging
-    setup_logging(config.get('logging', {}))
-    logger.info("QuantBet v%s iniciado", config.get('version', '0.2.0'))
-    
-    # Modo dashboard
-    if args.serve:
-        serve_dashboard(args.config, args.host, args.port)
+    # Mostrar estadísticas
+    if args.stats:
+        repo = Repository()
+        stats = repo.get_db_stats()
+        print("\n=== ESTADÍSTICAS DE QuantBet ===\n")
+        print(f"Snapshots totales: {stats['snapshots']['total']}")
+        print(f"  Por mercado: {stats['snapshots']['by_market']}")
+        print(f"  Último snapshot: {stats['snapshots']['last_timestamp']}")
+        print(f"\nDecisiones totales: {stats['decisions']['total']}")
+        print(f"  Por estrategia: {stats['decisions']['by_strategy']}")
+        print(f"  Score promedio: {stats['decisions']['avg_score']}")
+        print(f"\nResúmenes de mercado: {stats['summary']['total_markets']}")
         return
     
-    # Modo pipeline
-    # Inicializar BD
-    db = Database(config.get('database', {}).get('path', 'quantbet.db'))
-    repository = Repository(db)
+    # Limpiar datos antiguos
+    if args.cleanup > 0:
+        repo = Repository()
+        repo.cleanup_old_data(days_to_keep=args.cleanup)
+        logger.info(f"Limpieza completada: conservando {args.cleanup} días")
+        return
     
-    # Inicializar bankroll
-    bankroll_config = config.get('bankroll', {})
-    bankroll = BankrollManager(bankroll_config.get('initial', 1000.0))
+    # Iniciar dashboard
+    if args.serve:
+        serve_dashboard()
+        return
     
-    # Crear conector
-    if args.source:
-        connector = ConnectorFactory.create(args.source, config)
-    else:
-        connector = ConnectorFactory.create_from_config(config)
+    # Ejecutar pipeline
+    runner = QuantBetRunner(source=args.source, markets=args.markets)
+    result = runner.run_pipeline(mode=args.mode)
     
-    # Parsear mercados
-    enabled_markets = parse_markets(args.markets)
-    if not enabled_markets:
-        # Usar configuración
-        markets_config = config.get('markets', {})
-        enabled_markets_list = markets_config.get('enabled', ['1X2'])
-        enabled_markets = parse_markets(','.join(enabled_markets_list))
-    
-    try:
-        # Ejecutar estrategia seleccionada
-        mode_map = {
-            "arbitrage": run_arbitrage,
-            "value": run_value_betting,
-            "dutching": run_dutching,
-            "all": run_all
-        }
-        
-        # Preparar kwargs
-        kwargs = {
-            "connector": connector,
-            "repository": repository,
-            "bankroll": bankroll,
-            "config": config
-        }
-        
-        if args.mode in ["arbitrage", "all"]:
-            kwargs["enabled_markets"] = enabled_markets
-        
-        mode_map[args.mode](**kwargs)
-        
-        # Mostrar resumen
-        print("\n" + "=" * 50)
-        print(f"📊 RESUMEN DE EJECUCIÓN")
-        print(f"Modo: {args.mode}")
-        print(f"Fuente: {args.source or config.get('connector', {}).get('type', 'csv')}")
-        print(f"Mercados: {', '.join([m.value for m in enabled_markets])}")
-        print(f"Bankroll actual: {bankroll.get_balance():.2f} {bankroll.currency}")
-        print("=" * 50 + "\n")
-        
-    except Exception as e:
-        logger.error("Error en ejecución: %s", str(e), exc_info=True)
-        sys.exit(1)
-    finally:
-        # Cerrar recursos
-        if hasattr(connector, 'close'):
-            connector.close()
+    # Mostrar resumen
+    print("\n=== RESUMEN DE EJECUCIÓN ===\n")
+    for key, value in result.items():
+        print(f"{key}: {value}")
+    print(f"\nTimestamp: {datetime.now().isoformat()}")
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

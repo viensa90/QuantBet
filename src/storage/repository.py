@@ -1,6 +1,7 @@
 """
 src/storage/repository.py
 CRUD optimizado para snapshots y decisiones
+Versión: 0.3.1
 """
 
 import json
@@ -8,7 +9,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from src.storage.database import get_db
-from src.domain.entities import Snapshot, Opportunity, Decision
+from src.domain.entities import Snapshot, Decision
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,50 @@ class Repository:
     
     def __init__(self, db_path: str = "quantbet.db"):
         self.db = get_db(db_path)
+        self._ensure_tables()
+    
+    def _ensure_tables(self):
+        """Asegura que las tablas existan (para compatibilidad)"""
+        try:
+            # Verificar si la tabla snapshots existe
+            cursor = self.db.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='snapshots';
+            """)
+            if not cursor.fetchone():
+                # Crear tablas si no existen (para tests)
+                self._create_tables()
+        except Exception as e:
+            logger.warning(f"Error al verificar tablas: {e}")
+    
+    def _create_tables(self):
+        """Crea las tablas base si no existen"""
+        self.db.execute("""
+            CREATE TABLE IF NOT EXISTS snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL,
+                event_name TEXT,
+                market_type TEXT NOT NULL,
+                bookmaker TEXT,
+                odds_data TEXT NOT NULL,
+                timestamp DATETIME NOT NULL,
+                source TEXT
+            );
+        """)
+        
+        self.db.execute("""
+            CREATE TABLE IF NOT EXISTS decisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL,
+                strategy TEXT NOT NULL,
+                opportunity_data TEXT NOT NULL,
+                decision_data TEXT NOT NULL,
+                opportunity_score REAL,
+                timestamp DATETIME NOT NULL,
+                executed BOOLEAN DEFAULT 0
+            );
+        """)
+        logger.info("Tablas base creadas")
     
     # === SNAPSHOTS ===
     
@@ -161,7 +206,7 @@ class Repository:
             json.dumps(decision.decision_data),
             decision.opportunity_score,
             decision.timestamp.isoformat(),
-            decision.executed
+            1 if decision.executed else 0
         )
         
         cursor = self.db.execute(sql, params)
@@ -186,7 +231,7 @@ class Repository:
                 json.dumps(d.decision_data),
                 d.opportunity_score,
                 d.timestamp.isoformat(),
-                d.executed
+                1 if d.executed else 0
             )
             for d in decisions
         ]
@@ -299,57 +344,68 @@ class Repository:
             "summary": {}
         }
         
-        # Conteo de snapshots
-        cursor = self.db.execute("SELECT COUNT(*) FROM snapshots;")
-        stats["snapshots"]["total"] = cursor.fetchone()[0]
-        
-        # Conteo por mercado
-        cursor = self.db.execute("""
-            SELECT market_type, COUNT(*) as count
-            FROM snapshots
-            GROUP BY market_type;
-        """)
-        stats["snapshots"]["by_market"] = {row['market_type']: row['count'] for row in cursor.fetchall()}
-        
-        # Último snapshot
-        cursor = self.db.execute("""
-            SELECT MAX(timestamp) as last_timestamp
-            FROM snapshots;
-        """)
-        row = cursor.fetchone()
-        stats["snapshots"]["last_timestamp"] = row['last_timestamp'] if row else None
-        
-        # Conteo de decisiones
-        cursor = self.db.execute("SELECT COUNT(*) FROM decisions;")
-        stats["decisions"]["total"] = cursor.fetchone()[0]
-        
-        # Conteo por estrategia
-        cursor = self.db.execute("""
-            SELECT strategy, COUNT(*) as count
-            FROM decisions
-            GROUP BY strategy;
-        """)
-        stats["decisions"]["by_strategy"] = {row['strategy']: row['count'] for row in cursor.fetchall()}
-        
-        # Score promedio
-        cursor = self.db.execute("SELECT AVG(opportunity_score) FROM decisions;")
-        stats["decisions"]["avg_score"] = round(cursor.fetchone()[0] or 0, 2)
-        
-        # Resumen de mercado
-        cursor = self.db.execute("SELECT COUNT(*) FROM market_summary;")
-        stats["summary"]["total_markets"] = cursor.fetchone()[0]
+        try:
+            # Conteo de snapshots
+            cursor = self.db.execute("SELECT COUNT(*) FROM snapshots;")
+            stats["snapshots"]["total"] = cursor.fetchone()[0]
+            
+            # Conteo por mercado
+            cursor = self.db.execute("""
+                SELECT market_type, COUNT(*) as count
+                FROM snapshots
+                GROUP BY market_type;
+            """)
+            stats["snapshots"]["by_market"] = {row['market_type']: row['count'] for row in cursor.fetchall()}
+            
+            # Último snapshot
+            cursor = self.db.execute("""
+                SELECT MAX(timestamp) as last_timestamp
+                FROM snapshots;
+            """)
+            row = cursor.fetchone()
+            stats["snapshots"]["last_timestamp"] = row['last_timestamp'] if row else None
+            
+            # Conteo de decisiones
+            cursor = self.db.execute("SELECT COUNT(*) FROM decisions;")
+            stats["decisions"]["total"] = cursor.fetchone()[0]
+            
+            # Conteo por estrategia
+            cursor = self.db.execute("""
+                SELECT strategy, COUNT(*) as count
+                FROM decisions
+                GROUP BY strategy;
+            """)
+            stats["decisions"]["by_strategy"] = {row['strategy']: row['count'] for row in cursor.fetchall()}
+            
+            # Score promedio
+            cursor = self.db.execute("SELECT AVG(opportunity_score) FROM decisions;")
+            result = cursor.fetchone()
+            stats["decisions"]["avg_score"] = round(result[0] or 0, 2)
+            
+            # Resumen de mercado
+            cursor = self.db.execute("SELECT COUNT(*) FROM market_summary;")
+            stats["summary"]["total_markets"] = cursor.fetchone()[0]
+            
+        except Exception as e:
+            logger.warning(f"Error al obtener estadísticas: {e}")
+            stats["error"] = str(e)
         
         return stats
     
     def cleanup_old_data(self, days_to_keep: int = 30):
         """Limpia datos antiguos para mantener rendimiento"""
+        if days_to_keep <= 0:
+            logger.warning("days_to_keep debe ser mayor que 0")
+            return
+        
         # Eliminar snapshots antiguos
         sql_snapshots = """
             DELETE FROM snapshots
             WHERE timestamp < datetime('now', ?);
         """
         days_param = f"-{days_to_keep} days"
-        self.db.execute(sql_snapshots, (days_param,))
+        cursor = self.db.execute(sql_snapshots, (days_param,))
+        deleted_snapshots = cursor.rowcount
         
         # Eliminar decisiones antiguas (conservar las de mayor score)
         sql_decisions = """
@@ -357,15 +413,20 @@ class Repository:
             WHERE timestamp < datetime('now', ?)
             AND opportunity_score < 50;
         """
-        self.db.execute(sql_decisions, (days_param,))
+        cursor = self.db.execute(sql_decisions, (days_param,))
+        deleted_decisions = cursor.rowcount
         
         # Limpiar summary antiguo
         sql_summary = """
             DELETE FROM market_summary
             WHERE timestamp < datetime('now', ?);
         """
-        self.db.execute(sql_summary, (days_param,))
+        cursor = self.db.execute(sql_summary, (days_param,))
+        deleted_summary = cursor.rowcount
         
         # Vacuum para compactar BD
         self.db.execute("VACUUM;")
-        logger.info(f"Limpieza completada: datos anteriores a {days_to_keep} días eliminados")
+        
+        logger.info(f"Limpieza completada: {deleted_snapshots} snapshots, "
+                   f"{deleted_decisions} decisiones, {deleted_summary} resúmenes eliminados")
+        logger.info(f"Datos anteriores a {days_to_keep} días eliminados")

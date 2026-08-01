@@ -1,11 +1,13 @@
 """
 src/storage/migrations.py
 Gestor de migraciones para SQLite - índices y optimizaciones
+Versión: 0.3.1
 """
 
 import sqlite3
 import logging
-from typing import List, Tuple
+from typing import List, Dict, Any
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,9 @@ class MigrationManager:
     @classmethod
     def run_migrations(cls, db_path: str = "quantbet.db"):
         """Ejecuta todas las migraciones pendientes"""
+        # Asegurar que el directorio existe
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
@@ -94,6 +99,7 @@ class MigrationManager:
         logger.info(f"Versión actual de esquema: {current_version}")
         
         # Aplicar migraciones pendientes
+        applied_count = 0
         for migration in cls.MIGRATIONS:
             if migration["version"] > current_version:
                 logger.info(f"Aplicando migración v{migration['version']}: {migration['description']}")
@@ -102,20 +108,29 @@ class MigrationManager:
                         cursor.execute(sql)
                     except sqlite3.OperationalError as e:
                         logger.warning(f"Error en migración v{migration['version']}: {e}")
+                        # Continuar con la siguiente sentencia SQL
+                        continue
                 
                 cursor.execute(
                     "INSERT INTO schema_version (version) VALUES (?);",
                     (migration["version"],)
                 )
                 conn.commit()
+                applied_count += 1
                 logger.info(f"Migración v{migration['version']} completada")
         
         conn.close()
-        logger.info("Todas las migraciones aplicadas correctamente")
+        if applied_count > 0:
+            logger.info(f"Se aplicaron {applied_count} migraciones")
+        else:
+            logger.info("No hay migraciones pendientes")
     
     @classmethod
     def get_current_version(cls, db_path: str = "quantbet.db") -> int:
         """Obtiene la versión actual del esquema"""
+        if not Path(db_path).exists():
+            return 0
+            
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         try:
@@ -126,6 +141,27 @@ class MigrationManager:
             return 0
         finally:
             conn.close()
+    
+    @classmethod
+    def get_migration_status(cls, db_path: str = "quantbet.db") -> Dict[str, Any]:
+        """Obtiene el estado de las migraciones"""
+        current = cls.get_current_version(db_path)
+        total = len(cls.MIGRATIONS)
+        
+        return {
+            "current_version": current,
+            "total_migrations": total,
+            "pending": total - current,
+            "is_up_to_date": current >= total,
+            "migrations": [
+                {
+                    "version": m["version"],
+                    "description": m["description"],
+                    "applied": m["version"] <= current
+                }
+                for m in cls.MIGRATIONS
+            ]
+        }
 
 def apply_migrations(db_path: str = "quantbet.db"):
     """Función de utilidad para aplicar migraciones"""

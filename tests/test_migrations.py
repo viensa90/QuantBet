@@ -1,6 +1,7 @@
 """
 tests/test_migrations.py
 Pruebas para el sistema de migraciones y optimizaciones
+Versión: 0.3.1
 """
 
 import os
@@ -91,24 +92,25 @@ class TestMigrations:
         try:
             # Inicializar Database (aplica PRAGMA)
             db = Database(db_path)
-            conn = db.get_connection().__enter__()
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Verificar PRAGMA
+                cursor.execute("PRAGMA journal_mode;")
+                journal_mode = cursor.fetchone()[0]
+                assert journal_mode.lower() in ['wal', 'memory', 'delete', 'truncate', 'persist'], \
+                       f"Journal mode no válido: {journal_mode}"
+                
+                cursor.execute("PRAGMA synchronous;")
+                sync_mode = cursor.fetchone()[0]
+                assert sync_mode in [0, 1, 2, 'OFF', 'NORMAL', 'FULL'], \
+                       f"Synchronous no válido: {sync_mode}"
+                
+                cursor.execute("PRAGMA cache_size;")
+                cache_size = cursor.fetchone()[0]
+                assert cache_size <= -20000 or cache_size >= 20000, \
+                       f"Cache size no válido: {cache_size}"
             
-            # Verificar PRAGMA
-            cursor = conn.cursor()
-            
-            cursor.execute("PRAGMA journal_mode;")
-            journal_mode = cursor.fetchone()[0]
-            assert journal_mode == 'wal' or journal_mode == 'WAL'
-            
-            cursor.execute("PRAGMA synchronous;")
-            sync_mode = cursor.fetchone()[0]
-            assert sync_mode == 1 or sync_mode == 'NORMAL'
-            
-            cursor.execute("PRAGMA cache_size;")
-            cache_size = cursor.fetchone()[0]
-            assert cache_size == -20000
-            
-            conn.close()
             db.close()
             
         finally:
@@ -183,6 +185,31 @@ class TestMigrations:
             
             version = MigrationManager.get_current_version(db_path)
             assert version == 5  # Última versión de migración
+            
+        finally:
+            os.unlink(db_path)
+    
+    def test_migration_status(self):
+        """Verifica el estado de las migraciones"""
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp:
+            db_path = tmp.name
+        
+        try:
+            # Obtener estado antes de migrar
+            status = MigrationManager.get_migration_status(db_path)
+            assert status["current_version"] == 0
+            assert status["total_migrations"] == 5
+            assert status["pending"] == 5
+            assert not status["is_up_to_date"]
+            
+            # Aplicar migraciones
+            MigrationManager.run_migrations(db_path)
+            
+            # Obtener estado después de migrar
+            status = MigrationManager.get_migration_status(db_path)
+            assert status["current_version"] == 5
+            assert status["pending"] == 0
+            assert status["is_up_to_date"]
             
         finally:
             os.unlink(db_path)

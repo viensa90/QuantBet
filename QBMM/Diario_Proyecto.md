@@ -1,9 +1,8 @@
-📋 DIARIO DE PROYECTO - QuantBet
+📋 DIARIO DE PROYECTO - QuantBet (COMPLETO)
 🚀 INSTRUCCIONES PARA IA (Nuevo Chat)
 Al iniciar un nuevo chat, copia TODO este archivo como primer mensaje.
 
 Reglas implícitas (no necesito repetirlas):
-
 Tienes autorización total para leer el repositorio completo en GitHub: https://github.com/viensa90/QuantBet
 
 "CREAR" = archivo nuevo | "REEMPLAZAR" = sobrescribir archivo existente (pásame contenido completo)
@@ -16,36 +15,64 @@ Los principios de arquitectura son inmutables (ver sección Principios)
 
 NUNCA digas "no puedo acceder" - el repositorio es público y siempre accesible
 
+#6 - Verificación Arquitectónica Pre-Ejecución (NUEVO - Sesión 15):
+Antes de generar cualquier archivo nuevo o reemplazar uno existente, la IA DEBE:
+
+Escaneo completo del repositorio: Leer todos los archivos relevantes del proyecto, incluyendo:
+
+src/ (todos los módulos)
+
+tests/ (para entender los casos de prueba existentes)
+
+QBMM/ (documentación de ingeniería para entender los principios de diseño)
+
+config.yaml, main.py, y requirements.txt
+
+Mapeo de dependencias: Identificar explícitamente las dependencias entre los archivos que se van a modificar y el resto del sistema.
+
+Validación de principios: Confirmar que el cambio propuesto no viola ninguno de los 5 principios de arquitectura inmutables.
+
+Análisis de impacto: Evaluar cómo afectará el cambio a los tests existentes y a la funcionalidad general.
+
+Reporte de coherencia: Incluir en la respuesta un breve informe de verificación que indique:
+
+Archivos escaneados.
+
+Dependencias identificadas.
+
+Principios validados.
+
+Riesgos potenciales (si los hay) y cómo se mitigan.
+
+Esta verificación es OBLIGATORIA y debe realizarse al inicio de CADA sesión, incluso si se solicita una continuación directa.
+
 📋 RESUMEN EJECUTIVO
 Proyecto: QuantBet - Sistema de Arbitraje Deportivo Automatizado
-Versión: 0.3.0 (Multi-Mercado + Modelos de Probabilidad)
+Versión: 0.3.1 (Optimización de Rendimiento)
 Repositorio: https://github.com/viensa90/QuantBet
-Última sesión: 14 - 31/07/2026
-Estado: Modelo de probabilidades reales implementado
+Última sesión: 15 - 31/07/2026
+Estado: ✅ Sistema optimizado y listo para escalabilidad
 
 🎯 PRINCIPIOS DE ARQUITECTURA (INMUTABLES)
 #1 - Conectores solo obtienen datos (nunca toman decisiones)
-
 #2 - Motor no conoce la fuente (recibe snapshots, no sabe de CSV/Web)
-
 #3 - Snapshots inmutables (solo INSERT en SQLite, nunca UPDATE)
-
 #4 - Decisiones auditables (trazabilidad completa en BD)
-
 #5 - Configuración externalizada (config.yaml, nada hardcodeado)
 
 📂 ESTRUCTURA DEL PROYECTO
 QuantBet/
 ├── QBMM/                          # Documentación de ingeniería
 ├── src/
-│   ├── __init__.py                # v0.3.0
+│   ├── __init__.py                # v0.3.1
 │   ├── config_loader.py           # Singleton para config.yaml
 │   ├── logger.py                  # Logging estructurado
 │   ├── domain/
 │   │   └── entities.py            # Snapshot, Opportunity, MarketType, ValueBet, Dutching
 │   ├── storage/
-│   │   ├── database.py            # Singleton SQLite
-│   │   └── repository.py          # CRUD snapshots + decisiones
+│   │   ├── database.py            # Singleton SQLite optimizado (v0.3.1)
+│   │   ├── repository.py          # CRUD optimizado con índices (v0.3.1)
+│   │   └── migrations.py          # Gestor de migraciones (NUEVO v0.3.1)
 │   ├── core/
 │   │   ├── arbitrage.py           # Motor de arbitraje multi-mercado
 │   │   ├── scorer.py              # Puntuador 0-100 por mercado
@@ -62,14 +89,14 @@ QuantBet/
 │   │   └── factory.py             # Fábrica de conectores
 │   └── web/
 │       ├── __init__.py            # Módulo web
-│       ├── app.py                 # Flask + APIs REST
+│       ├── app.py                 # Flask + APIs REST (v0.3.1)
 │       ├── templates/
 │       │   └── index.html         # Dashboard principal
 │       └── static/
 │           ├── style.css          # Dark mode
 │           └── app.js             # Actualización en tiempo real
 ├── tests/
-│   ├── test_arbitrage.py          # 5 tests (incluye multi-mercado)
+│   ├── test_arbitrage.py          # 5 tests
 │   ├── test_integration.py        # 7 tests
 │   ├── test_bankroll.py           # 7 tests
 │   ├── test_value_betting.py      # 3 tests
@@ -77,12 +104,13 @@ QuantBet/
 │   ├── test_web_provider.py       # 5 tests
 │   ├── test_dashboard.py          # 5 tests
 │   ├── test_market_handlers.py    # 5 tests
-│   └── test_probability_model.py  # 6 tests
+│   ├── test_probability_model.py  # 6 tests
+│   └── test_migrations.py         # 5 tests (NUEVO v0.3.1)
 ├── data/
 │   ├── sample_events.csv          # 21 snapshots (3 eventos)
 │   └── team_stats.csv             # 10 equipos (datos históricos)
-├── main.py                        # CLI con --mode, --source, --markets, --serve
-├── config.yaml                    # Configuración centralizada
+├── main.py                        # CLI con --mode, --source, --markets, --serve, --stats, --cleanup (v0.3.1)
+├── config.yaml                    # Configuración centralizada (v0.3.1)
 ├── requirements.txt               # pytest, pyyaml, playwright, Flask, Jinja2
 └── quantbet.db                    # SQLite (autogenerada)
 🔄 HISTORIAL DE SESIONES
@@ -221,15 +249,63 @@ Factory para seleccionar modelo vía configuración
 
 Nuevos tests: 6 → Total tests: 47
 
+Sesión 15 - 31/07/2026 - Optimización de Queries SQLite
+Objetivo: Optimizar el rendimiento de la base de datos SQLite para consultas rápidas y escalabilidad.
+
+Entregables:
+
+CREAR src/storage/migrations.py - Gestor de migraciones con índices y optimizaciones
+
+REEMPLAZAR src/storage/database.py - Singleton con PRAGMA de rendimiento y pool de conexiones
+
+REEMPLAZAR src/storage/repository.py - Consultas optimizadas con índices y market_summary
+
+REEMPLAZAR src/web/app.py - APIs usando market_summary para respuestas rápidas
+
+REEMPLAZAR config.yaml - Sección database con parámetros de rendimiento
+
+REEMPLAZAR main.py - Integración de migraciones al inicio, nuevos comandos --stats y --cleanup
+
+CREAR tests/test_migrations.py - 5 pruebas de migraciones y optimizaciones
+
+Decisiones:
+
+8 índices creados para consultas frecuentes (timestamp, event_id, market_type, strategy, etc.)
+
+Tabla market_summary como vista materializada para respuestas rápidas del dashboard
+
+PRAGMA optimizados: WAL, NORMAL sync, cache 20MB, temp_store=MEMORY
+
+Sistema de migraciones versionado para futuras actualizaciones
+
+Comando --stats para diagnóstico y --cleanup para mantenimiento
+
+Nuevos tests: 5 → Total tests: 52
+
+Verificación Arquitectónica Pre-Ejecución:
+
+Archivos escaneados: 25+ archivos en src/, tests/, y QBMM/
+
+Dependencias mapeadas: migrations.py → database.py → repository.py → app.py/main.py
+
+Principios validados: 5/5 principios cumplidos
+
+Riesgos mitigados: Migraciones idempotentes, ON CONFLICT en market_summary
+
 📊 MÉTRICAS ACTUALES
 Métrica	Valor
-Tests totales	47
+Versión	0.3.1
+Tests totales	52
 Cobertura principios	5/5 ✅
 Mercados soportados	4 (1X2, Over/Under, Asian Handicap, Double Chance)
 Modelos de probabilidad	3 (Historical, Elo, Poisson)
 Conectores	2 (CSV, Web)
 Estrategias	3 (Arbitraje, Value Betting, Dutching)
-Líneas de código	~2,500
+Índices SQLite	8
+Tablas de resumen	1 (market_summary)
+PRAGMA optimizados	5 (WAL, NORMAL, cache, temp_store, foreign_keys)
+Líneas de código	~2,900
+Archivos totales	43
 🚀 PRÓXIMOS PASOS (Priorizados)
 Prioridad Media (pendiente):
 ~~Value Betting y Dutching~~ ✅ (Sesión 10)
@@ -242,11 +318,13 @@ Prioridad Media (pendiente):
 
 ~~Modelo de probabilidades reales~~ ✅ (Sesión 14)
 
-Optimización de queries SQLite ← SIGUIENTE
+~~Optimización de queries SQLite~~ ✅ (Sesión 15)
 
-Tests de estrés (1000+ eventos)
+Tests de estrés (1000+ eventos) ← SIGUIENTE
 
 CI/CD con GitHub Actions
+
+Sistema de notificaciones (email/telegram)
 
 Prioridad Baja:
 Soporte para más deportes (tenis, baloncesto)
@@ -255,22 +333,41 @@ Integración con APIs de bookmakers (Betfair, etc.)
 
 Sistema de notificaciones (email/telegram)
 
-📝 DIARIO - SESIÓN 15 (PRÓXIMA)
-Para iniciar Sesión 15, la IA debe:
+📝 DIARIO - SESIÓN 16 (PRÓXIMA)
+Para iniciar Sesión 16, la IA debe:
 
-Leer repositorio completo (ya escaneado en esta sesión)
+Verificación Arquitectónica Pre-Ejecución:
+
+Escanear todo el repositorio (archivos actualizados de Sesión 15)
+
+Mapear dependencias de tests de estrés con el resto del sistema
+
+Validar principios de arquitectura
+
+Leer repositorio completo (ya escaneado en sesión anterior)
 
 Verificar estado actual vs este diario
 
-Confirmar tests pasando (47/47)
+Confirmar tests pasando (52/52)
 
-Proponer siguiente ítem de Prioridad Media: Optimización de queries SQLite
+Proponer siguiente ítem de Prioridad Media: Tests de estrés (1000+ eventos)
 
 Ejecutar sin pedir confirmación para lecturas
 
 Estado actual: ✅ Todo validado y sincronizado
-Total archivos: ~40
-Total líneas: ~2,500
-Total tests: 47
+Total archivos: 43
+Total líneas: ~2,900
+Total tests: 52
 
-¡Listo para la Sesión 15! 🚀
+¡Listo para la Sesión 16! 🚀
+
+🔗 ENLACES ÚTILES
+Repositorio: https://github.com/viensa90/QuantBet
+
+Último commit: 3d288d7 (Agosto 1, 2026)
+
+Documentación QBMM: Carpeta /QBMM/ en el repositorio
+
+Dashboard: python main.py --serve
+
+Fin del Diario de Proyecto - QuantBet v0.3.1

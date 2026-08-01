@@ -1,6 +1,7 @@
 """
 src/web/app.py
 Servidor Flask con APIs REST - Optimizado con market_summary
+Versión: 0.3.1
 """
 
 import os
@@ -17,7 +18,6 @@ from src.storage.database import get_db
 from src.storage.repository import Repository
 from src.storage.migrations import apply_migrations
 from src.core.scorer import OpportunityScorer
-from src.core.arbitrage import ArbitrageEngine
 from src.config_loader import config
 
 logger = logging.getLogger(__name__)
@@ -29,11 +29,10 @@ app = Flask(__name__,
 # Singleton de repositorio
 repo = None
 scorer = None
-arbitrage_engine = None
 
 def init_app():
     """Inicializa la aplicación con migraciones y configuración"""
-    global repo, scorer, arbitrage_engine
+    global repo, scorer
     
     # Aplicar migraciones
     apply_migrations()
@@ -41,9 +40,8 @@ def init_app():
     # Inicializar componentes
     repo = Repository()
     scorer = OpportunityScorer()
-    arbitrage_engine = ArbitrageEngine()
     
-    logger.info("Dashboard web inicializado con optimizaciones")
+    logger.info("Dashboard web inicializado con optimizaciones v0.3.1")
 
 # === RUTAS PÚBLICAS ===
 
@@ -51,7 +49,7 @@ def init_app():
 def index():
     """Dashboard principal"""
     return render_template('index.html', 
-                          version=config.get('version', '0.3.0'),
+                          version=config.get('version', '0.3.1'),
                           timestamp=datetime.now().isoformat())
 
 @app.route('/api/summary')
@@ -152,13 +150,21 @@ def get_stats():
     stats["timestamp"] = datetime.now().isoformat()
     return jsonify(stats)
 
+@app.route('/api/migrations/status')
+def get_migration_status():
+    """Estado de las migraciones"""
+    from src.storage.migrations import MigrationManager
+    status = MigrationManager.get_migration_status()
+    status["timestamp"] = datetime.now().isoformat()
+    return jsonify(status)
+
 @app.route('/api/health')
 def health_check():
     """Health check para monitoreo"""
     db_stats = get_db().get_connection_stats()
     return jsonify({
         "status": "healthy",
-        "version": config.get('version', '0.3.0'),
+        "version": config.get('version', '0.3.1'),
         "database": db_stats,
         "timestamp": datetime.now().isoformat()
     })

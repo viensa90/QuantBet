@@ -1,4 +1,6 @@
 # QuantBet - Configuración Centralizada
+# Versión: 0.3.1 (Optimización de rendimiento)
+
 version: "0.3.1"
 
 # Estrategias habilitadas
@@ -46,7 +48,7 @@ connectors:
       - "https://example.com/odds"
       - "https://example.com/live"
 
-# Base de datos y rendimiento
+# Base de datos y rendimiento (NUEVO en v0.3.1)
 database:
   path: "quantbet.db"
   pool_size: 5

@@ -1,12 +1,13 @@
 """
 src/storage/database.py
 Singleton para conexión SQLite optimizada
+Versión: 0.3.1
 """
 
 import sqlite3
 import logging
 from contextlib import contextmanager
-from typing import Generator, Optional
+from typing import Generator, Optional, Dict, Any
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ class Database:
     
     _instance: Optional['Database'] = None
     _connection: Optional[sqlite3.Connection] = None
+    _db_path: str = "quantbet.db"
     
     def __new__(cls, db_path: str = "quantbet.db"):
         if cls._instance is None:
@@ -95,26 +97,31 @@ class Database:
             self._connection = None
             logger.info("Conexión SQLite cerrada")
     
-    def get_connection_stats(self) -> dict:
+    def get_connection_stats(self) -> Dict[str, Any]:
         """Retorna estadísticas de la conexión"""
         if not self._connection:
             return {"status": "not_initialized"}
         
         cursor = self._connection.cursor()
         
-        # Obtener tamaño de la BD
-        cursor.execute("SELECT page_count * page_size FROM pragma_page_count, pragma_page_size;")
-        size_bytes = cursor.fetchone()[0]
-        
-        # Obtener número de tablas
-        cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
-        table_count = cursor.fetchone()[0]
-        
-        # Estado de WAL
-        cursor.execute("PRAGMA journal_mode;")
-        journal_mode = cursor.fetchone()[0]
-        
-        cursor.close()
+        try:
+            # Obtener tamaño de la BD
+            cursor.execute("SELECT page_count * page_size FROM pragma_page_count, pragma_page_size;")
+            size_bytes = cursor.fetchone()[0]
+            
+            # Obtener número de tablas
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
+            table_count = cursor.fetchone()[0]
+            
+            # Estado de WAL
+            cursor.execute("PRAGMA journal_mode;")
+            journal_mode = cursor.fetchone()[0]
+            
+        except sqlite3.Error as e:
+            logger.warning(f"Error al obtener estadísticas: {e}")
+            return {"status": "error", "message": str(e)}
+        finally:
+            cursor.close()
         
         return {
             "status": "connected",

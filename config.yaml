@@ -1,5 +1,5 @@
 # QuantBet - Configuración Centralizada
-# Versión: 0.3.1 (Optimización de rendimiento)
+# Versión: 0.3.1 (Optimización de rendimiento + Notificaciones)
 
 version: "0.3.1"
 
@@ -48,7 +48,7 @@ connectors:
       - "https://example.com/odds"
       - "https://example.com/live"
 
-# Base de datos y rendimiento (NUEVO en v0.3.1)
+# Base de datos y rendimiento
 database:
   path: "quantbet.db"
   pool_size: 5
@@ -64,6 +64,35 @@ web:
   port: 5000
   debug: true
   refresh_seconds: 30
+
+# Notificaciones (NUEVO v0.3.1)
+notifications:
+  enabled: true
+  min_score: 70.0
+  interval_minutes: 15
+  max_per_interval: 10
+
+# Email (SMTP)
+email:
+  enabled: false
+  smtp_server: "smtp.gmail.com"
+  smtp_port: 587
+  username: "tu_email@gmail.com"
+  password: "tu_contraseña"
+  from_email: "tu_email@gmail.com"
+  to_emails:
+    - "destinatario1@gmail.com"
+    - "destinatario2@gmail.com"
+  min_score: 70.0
+
+# Telegram Bot
+telegram:
+  enabled: false
+  bot_token: "TU_BOT_TOKEN"
+  chat_ids:
+    - "ID_CHAT_1"
+    - "ID_CHAT_2"
+  min_score: 70.0
 
 # Logging
 logging:

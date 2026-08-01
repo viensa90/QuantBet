@@ -2,7 +2,7 @@
 """
 QuantBet - Sistema de Arbitraje Deportivo Automatizado
 CLI principal con soporte para múltiples estrategias y modos
-Versión: 0.3.1 (Optimización de rendimiento)
+Versión: 0.3.1 (Optimización de rendimiento + Notificaciones)
 """
 
 import sys
@@ -27,6 +27,7 @@ from src.core.value_betting import ValueBetDetector
 from src.core.dutching import DutchingCalculator
 from src.core.probability_model import ProbabilityModelFactory
 from src.domain.entities import Decision, Opportunity, Snapshot
+from src.notifications import NotificationManager
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class QuantBetRunner:
         self.markets = markets or config.get('markets', {}).get('enabled', ['1X2'])
         self.repo = Repository()
         self.scorer = OpportunityScorer()
+        self.notifier = NotificationManager()
         
         # Inicializar componentes según configuración
         self.arbitrage_engine = ArbitrageEngine()
@@ -106,6 +108,7 @@ class QuantBetRunner:
         if decisions:
             self.repo.save_decisions_batch(decisions)
             self._update_market_summary(decisions)
+            self._send_notifications(decisions)
             logger.info(f"Guardadas {len(decisions)} decisiones de arbitraje")
         
         return decisions
@@ -153,6 +156,7 @@ class QuantBetRunner:
         if decisions:
             self.repo.save_decisions_batch(decisions)
             self._update_market_summary(decisions)
+            self._send_notifications(decisions)
             logger.info(f"Guardadas {len(decisions)} decisiones de value betting")
         
         return decisions
@@ -200,6 +204,7 @@ class QuantBetRunner:
         if decisions:
             self.repo.save_decisions_batch(decisions)
             self._update_market_summary(decisions)
+            self._send_notifications(decisions)
             logger.info(f"Guardadas {len(decisions)} decisiones de dutching")
         
         return decisions
@@ -222,6 +227,26 @@ class QuantBetRunner:
                 total_opportunities=total_opps,
                 avg_score=best_opp
             )
+    
+    def _send_notifications(self, decisions: List[Decision]):
+        """Envía notificaciones para decisiones de alto score"""
+        if not decisions:
+            return
+        
+        # Convertir a dict para el notificador
+        decisions_dict = [
+            {
+                'event_id': d.event_id,
+                'strategy': d.strategy,
+                'score': d.opportunity_score,
+                'data': d.opportunity_data,
+                'timestamp': d.timestamp.isoformat()
+            }
+            for d in decisions
+        ]
+        
+        # Enviar notificaciones
+        self.notifier.check_and_notify(force=True)
     
     def run_all(self, snapshots: List[Snapshot]) -> dict:
         """Ejecuta todas las estrategias y retorna resumen"""
@@ -284,7 +309,7 @@ def main():
     # Configurar logging
     setup_logging()
     
-    # Aplicar migraciones al inicio (Sesión 15)
+    # Aplicar migraciones al inicio
     logger.info("Verificando migraciones de base de datos...")
     try:
         apply_migrations()
@@ -325,7 +350,33 @@ def main():
                        action='store_true',
                        help='Mostrar estadísticas de la base de datos y salir')
     
+    parser.add_argument('--notify', 
+                       action='store_true',
+                       help='Verificar y enviar notificaciones manualmente')
+    
+    parser.add_argument('--send-manual', 
+                       nargs=2,
+                       metavar=('EVENT_ID', 'STRATEGY'),
+                       help='Enviar notificación manual para un evento (ej: event_001 all)')
+    
     args = parser.parse_args()
+    
+    # Notificaciones manuales
+    if args.notify:
+        notifier = NotificationManager()
+        sent = notifier.check_and_notify(force=True)
+        print(f"\n✅ Notificaciones enviadas: {sent}")
+        return
+    
+    if args.send_manual:
+        event_id, strategy = args.send_manual
+        notifier = NotificationManager()
+        sent = notifier.send_manual_notification(event_id, strategy)
+        if sent:
+            print(f"\n✅ Notificación manual enviada para evento {event_id}")
+        else:
+            print(f"\n❌ No se pudo enviar notificación para evento {event_id}")
+        return
     
     # Mostrar estadísticas
     if args.stats:

@@ -3,7 +3,7 @@ pytest>=7.0.0
 pyyaml>=6.0
 playwright>=1.40.0
 Flask>=2.3.0
-Jinja2>=3.1.0
+Jinja2>=3.1.6
 
 # Dependencias para tests
 pytest-flask>=1.2.0

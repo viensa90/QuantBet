@@ -18,7 +18,7 @@ flask-swagger-ui>=4.11.1
 playwright>=1.35.0
 
 # --- Notificaciones ---
-sendgrid>=6.10.0
+sendgrid>=6.12.5
 python-telegram-bot>=20.0
 
 # --- Logs Avanzados ---

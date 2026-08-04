@@ -35,7 +35,10 @@ class MarketType(Enum):
 
 @dataclass
 class Snapshot:
-    """Snapshot inmutable de odds en un momento dado"""
+    """
+    Snapshot inmutable de odds en un momento dado.
+    Incluye metadata para información adicional (ej. estadísticas de equipos).
+    """
     event_id: str
     event_name: str
     market_type: str
@@ -43,6 +46,7 @@ class Snapshot:
     odds_data: Dict[str, float]
     timestamp: datetime
     source: str = "unknown"
+    metadata: Dict[str, Any] = field(default_factory=dict)  # ✅ NUEVO
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -52,7 +56,8 @@ class Snapshot:
             "bookmaker": self.bookmaker,
             "odds_data": self.odds_data,
             "timestamp": self.timestamp.isoformat(),
-            "source": self.source
+            "source": self.source,
+            "metadata": self.metadata  # ✅ INCLUIDO
         }
 
 
@@ -66,7 +71,6 @@ class Opportunity:
     stakes: Dict[str, float]
     source: str
     timestamp: datetime
-    # Atributo opcional para compatibilidad con scorer
     arbitrage_percent: float = None
     
     def __post_init__(self):

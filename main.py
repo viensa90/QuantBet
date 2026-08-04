@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 QuantBet - Sistema de Arbitraje Deportivo Automatizado
-CLI Principal - v0.3.3 (CORREGIDO - Versión Final)
+CLI Principal - v0.3.3
 
 Uso:
     python main.py --mode all --source csv
@@ -30,21 +30,17 @@ from src.storage.repository import Repository
 from src.core.arbitrage import ArbitrageEngine
 from src.core.value_betting import ValueBetDetector
 from src.core.dutching import DutchingCalculator
-from src.core.scorer import OpportunityScorer
+from src.core.scorer import OpportunityScorer  # ✅ CORREGIDO
 from src.core.bankroll import BankrollManager
 from src.connectors.csv_provider import CSVProvider
 from src.connectors.web_provider import WebProvider
-from src.connectors.factory import ConnectorFactory
+from src.connectors.factory import ConnectorFactory  # ✅ CORREGIDO
 from src.domain.entities import Event, Market, Opportunity, Snapshot
 
 # Cargar configuración
 config = ConfigLoader().config
 logger = setup_logger("quantbet")
 
-
-# ============================================================
-# ESTRATEGIAS (MODIFICADAS PARA TRABAJAR CON SNAPSHOTS)
-# ============================================================
 
 def run_arbitrage(snapshots: List[Snapshot]) -> List[Dict]:
     """
@@ -54,14 +50,14 @@ def run_arbitrage(snapshots: List[Snapshot]) -> List[Dict]:
         snapshots: Lista de Snapshots inmutables
     
     Returns:
-        Lista de oportunidades de arbitraje (diccionarios)
+        Lista de oportunidades de arbitraje
     """
     logger.info("🔄 Ejecutando motor de arbitraje...")
     
     engine = ArbitrageEngine()
-    opportunities = engine.analyze_snapshots(snapshots)  # ✅ Método correcto
+    opportunities = engine.detect_opportunities(snapshots)  # ✅ CORREGIDO
     
-    # Convertir a dict para mantener compatibilidad con el resto
+    # Convertir a dict para mantener compatibilidad
     result = [opp.to_dict() for opp in opportunities]
     
     # Filtrar por umbral mínimo de beneficio
@@ -81,15 +77,13 @@ def run_value_betting(snapshots: List[Snapshot]) -> List[Dict]:
         snapshots: Lista de Snapshots inmutables
     
     Returns:
-        Lista de oportunidades de value betting (diccionarios)
+        Lista de oportunidades de value betting
     """
     logger.info("💎 Ejecutando detector de value betting...")
     
     detector = ValueBetDetector()
-    # Asumimos que ValueBetDetector tiene un método analyze_snapshots similar
-    opportunities = detector.analyze_snapshots(snapshots)
+    opportunities = detector.detect_value_bets(snapshots)  # ✅ CORREGIDO
     
-    # Convertir a dict
     result = [opp.to_dict() for opp in opportunities]
     
     # Filtrar por probabilidad mínima
@@ -104,30 +98,18 @@ def run_value_betting(snapshots: List[Snapshot]) -> List[Dict]:
 def run_dutching(snapshots: List[Snapshot]) -> List[Dict]:
     """
     Ejecutar calculador de dutching sobre snapshots.
-    
-    Args:
-        snapshots: Lista de Snapshots inmutables
-    
-    Returns:
-        Lista de oportunidades de dutching (diccionarios)
+    NOTA: DutchingCalculator tiene una interfaz diferente (calcula sobre selecciones, no sobre snapshots).
+    Esta función es un placeholder hasta que se implemente la integración completa.
     """
     logger.info("📊 Ejecutando calculador de dutching...")
     
     calculator = DutchingCalculator()
-    # Asumimos que DutchingCalculator tiene un método analyze_snapshots similar
-    opportunities = calculator.analyze_snapshots(snapshots)
+    opportunities = []
+    # TODO: Implementar lógica de Dutching con la interfaz correcta
+    logger.warning("⚠️ Dutching no implementado completamente con la nueva interfaz")
     
-    # Convertir a dict
-    result = [opp.to_dict() for opp in opportunities]
-    
-    logger.info(f"✅ Dutching: {len(result)} oportunidades encontradas")
-    
-    return result
+    return opportunities
 
-
-# ============================================================
-# PIPELINE PRINCIPAL (MODIFICADO PARA USAR SNAPSHOTS)
-# ============================================================
 
 def run_pipeline(
     source: str = "csv",
@@ -150,7 +132,7 @@ def run_pipeline(
     logger.info(f"🚀 Iniciando pipeline con fuente: {source}, modo: {mode}")
     
     # 1. Obtener datos (Snapshots inmutables) - Principio #2
-    provider = ConnectorFactory.create(source, config)
+    provider = ConnectorFactory.create(source, config)  # ✅ CORREGIDO
     snapshots = provider.fetch_snapshots()
     
     if not snapshots:
@@ -162,7 +144,7 @@ def run_pipeline(
     
     logger.info(f"📥 Obtenidos {len(snapshots)} snapshots")
     
-    # 2. Ejecutar estrategias (pasando snapshots directamente)
+    # 2. Ejecutar estrategias
     strategies = config.get("strategies", {})
     all_opportunities = []
     results = {}
@@ -182,10 +164,9 @@ def run_pipeline(
         all_opportunities.extend(opps)
         results["dutching"] = len(opps)
     
-    # 3. Guardar en base de datos (Snapshots inmutables - Principio #3)
+    # 3. Guardar en base de datos (Principio #3)
     if save and all_opportunities:
         repo = Repository()
-        # Convertir snapshots a dict para guardar
         events = [s.to_dict() for s in snapshots]
         snapshot_id = repo.save_snapshot(events, source)
         repo.save_opportunities(all_opportunities, snapshot_id)
@@ -193,7 +174,7 @@ def run_pipeline(
         results["snapshot_id"] = snapshot_id
     
     results["total_opportunities"] = len(all_opportunities)
-    results["events_processed"] = len(snapshots)  # snapshots == eventos
+    results["events_processed"] = len(snapshots)
     results["opportunities"] = all_opportunities
     
     # 4. Mostrar resumen
@@ -235,10 +216,6 @@ def print_summary(results: Dict[str, Any]):
     
     print("="*60)
 
-
-# ============================================================
-# COMANDOS DE GESTIÓN (SIN CAMBIOS)
-# ============================================================
 
 def show_stats():
     """Mostrar estadísticas de la base de datos"""
@@ -414,10 +391,6 @@ def generate_report(days: int = 7) -> Dict[str, Any]:
     
     return report
 
-
-# ============================================================
-# PUNTO DE ENTRADA PRINCIPAL (SIN CAMBIOS)
-# ============================================================
 
 def main():
     """Punto de entrada principal"""

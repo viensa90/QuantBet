@@ -107,9 +107,10 @@ class CSVProvider(IDataProvider):
                 event_name=event_name,
                 market_type=market_type,
                 bookmaker=bookmaker,
-                odds_data=odds_data,  # Dict[str, float]
+                odds_data=odds_data,          # Dict[str, float]
                 timestamp=timestamp,
-                source=self._provider_name
+                source=self._provider_name,
+                metadata={}                  # ✅ Campo añadido
             )
             snapshots.append(snapshot)
         

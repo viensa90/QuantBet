@@ -1,13 +1,13 @@
 """
 Gestor de base de datos SQLite optimizado
-Versión: 0.3.3
+Versión: 0.3.3 (COMPLETA)
 """
 
 import sqlite3
 import json
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Union
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 import os
 
@@ -173,6 +173,14 @@ class Database:
         conn.commit()
         return cursor
     
+    def executemany(self, query: str, params_list: List[tuple]) -> sqlite3.Cursor:
+        """Ejecutar múltiples queries en batch"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.executemany(query, params_list)
+        conn.commit()
+        return cursor
+    
     def fetch_all(self, query: str, params: tuple = ()) -> List[Dict]:
         """Ejecutar query y devolver todos los resultados como dicts"""
         cursor = self.execute(query, params)
@@ -193,6 +201,19 @@ class Database:
         cursor = self.execute(query, tuple(data.values()))
         return cursor.lastrowid
     
+    def insert_batch(self, table: str, data_list: List[Dict[str, Any]]) -> int:
+        """Insertar múltiples registros en batch"""
+        if not data_list:
+            return 0
+        
+        columns = ', '.join(data_list[0].keys())
+        placeholders = ', '.join(['?'] * len(data_list[0]))
+        query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+        
+        params_list = [tuple(data.values()) for data in data_list]
+        cursor = self.executemany(query, params_list)
+        return len(params_list)
+    
     def get_stats(self) -> Dict[str, Any]:
         """Obtener estadísticas de la base de datos"""
         stats = {}
@@ -211,6 +232,12 @@ class Database:
         )
         for row in results:
             stats[f"{row['strategy']}_count"] = row["count"]
+        
+        # Última ejecución
+        result = self.fetch_one(
+            "SELECT timestamp FROM snapshots ORDER BY timestamp DESC LIMIT 1"
+        )
+        stats["last_execution"] = result["timestamp"] if result else "N/A"
         
         # Tamaño de la base de datos
         if os.path.exists(self.db_path):
@@ -260,5 +287,19 @@ class Database:
         conn.commit()
 
 
-# Para compatibilidad con código antiguo
+# --- ALIAS PARA COMPATIBILIDAD CON CÓDIGO EXISTENTE ---
 DatabaseManager = Database
+
+
+# --- FUNCIÓN DE CONVENIENCIA PARA REPOSITORY.PY ---
+def get_db(db_path: Optional[str] = None) -> sqlite3.Connection:
+    """
+    Obtener conexión a la base de datos (función de conveniencia)
+    
+    Args:
+        db_path: Ruta opcional a la base de datos (ignorada, usa singleton)
+    
+    Returns:
+        Conexión SQLite
+    """
+    return Database().get_connection()

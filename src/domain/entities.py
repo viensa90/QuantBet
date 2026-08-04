@@ -1,7 +1,7 @@
 """
 src/domain/entities.py
 Entidades del dominio para QuantBet
-Versión: 0.3.1 (Soporte para Tenis)
+Versión: 0.3.3 (COMPLETA)
 """
 
 from dataclasses import dataclass, field
@@ -9,18 +9,76 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 from enum import Enum
 
+
 class MarketType(Enum):
     """Tipos de mercado soportados"""
-    # Mercados existentes
+    # Fútbol
     ODDS_1X2 = "1X2"
     OVER_UNDER = "Over/Under"
     ASIAN_HANDICAP = "Asian Handicap"
     DOUBLE_CHANCE = "Double Chance"
     
-    # Nuevos mercados de Tenis
+    # Tenis
     TENNIS_WINNER = "Tennis Winner"
     TENNIS_SET_HANDICAP = "Tennis Set Handicap"
     TENNIS_TOTAL_GAMES = "Tennis Total Games"
+    
+    # Baloncesto
+    BASKETBALL_MONEYLINE = "Basketball Moneyline"
+    POINT_SPREAD = "Point Spread"
+    TOTAL_POINTS = "Total Points"
+    QUARTER_WINNER = "Quarter Winner"
+
+
+@dataclass
+class Event:
+    """Evento deportivo con sus odds"""
+    event_id: str
+    event_name: str
+    sport: str
+    market_type: str
+    odds: Dict[str, float]
+    bookmaker: str = "unknown"
+    timestamp: Optional[datetime] = None
+    
+    def __post_init__(self):
+        if self.timestamp is None:
+            self.timestamp = datetime.now()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "event_id": self.event_id,
+            "event_name": self.event_name,
+            "sport": self.sport,
+            "market_type": self.market_type,
+            "odds": self.odds,
+            "bookmaker": self.bookmaker,
+            "timestamp": self.timestamp.isoformat()
+        }
+
+
+@dataclass
+class Market:
+    """Mercado deportivo (agrupación de eventos)"""
+    market_type: str
+    sport: str
+    events: List[Event] = field(default_factory=list)
+    enabled: bool = True
+    
+    def add_event(self, event: Event):
+        self.events.append(event)
+    
+    def get_events(self) -> List[Event]:
+        return self.events
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "market_type": self.market_type,
+            "sport": self.sport,
+            "event_count": len(self.events),
+            "enabled": self.enabled
+        }
+
 
 @dataclass
 class Snapshot:
@@ -34,7 +92,6 @@ class Snapshot:
     source: str = "unknown"
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convierte a diccionario para almacenamiento"""
         return {
             "event_id": self.event_id,
             "event_name": self.event_name,
@@ -44,6 +101,7 @@ class Snapshot:
             "timestamp": self.timestamp.isoformat(),
             "source": self.source
         }
+
 
 @dataclass
 class Opportunity:
@@ -57,7 +115,6 @@ class Opportunity:
     timestamp: datetime
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convierte a diccionario para almacenamiento"""
         return {
             "event_id": self.event_id,
             "market_type": self.market_type,
@@ -67,6 +124,24 @@ class Opportunity:
             "source": self.source,
             "timestamp": self.timestamp.isoformat()
         }
+
+
+@dataclass
+class ScoredOpportunity:
+    """Oportunidad con puntuación (para ranking)"""
+    opportunity: Opportunity
+    score: float
+    strategy: str = "arbitrage"
+    rank: int = 0
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            **self.opportunity.to_dict(),
+            "score": self.score,
+            "strategy": self.strategy,
+            "rank": self.rank
+        }
+
 
 @dataclass
 class ValueBet:
@@ -94,6 +169,7 @@ class ValueBet:
             "score": self.score
         }
 
+
 @dataclass
 class DutchingResult:
     """Resultado del cálculo de Dutching"""
@@ -118,6 +194,7 @@ class DutchingResult:
             "score": self.score
         }
 
+
 @dataclass
 class Decision:
     """Decisión tomada por el sistema (auditable)"""
@@ -138,4 +215,52 @@ class Decision:
             "opportunity_score": self.opportunity_score,
             "timestamp": self.timestamp.isoformat(),
             "executed": self.executed
+        }
+
+
+@dataclass
+class TennisMatch:
+    """Entidad específica para partidos de Tenis"""
+    match_id: str
+    player1: str
+    player2: str
+    tournament: str
+    surface: str  # hard, clay, grass
+    is_finished: bool = False
+    odds: Dict[str, float] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "match_id": self.match_id,
+            "player1": self.player1,
+            "player2": self.player2,
+            "tournament": self.tournament,
+            "surface": self.surface,
+            "is_finished": self.is_finished,
+            "odds": self.odds,
+            "timestamp": self.timestamp.isoformat()
+        }
+
+
+@dataclass
+class BasketballMatch:
+    """Entidad específica para partidos de Baloncesto"""
+    match_id: str
+    home_team: str
+    away_team: str
+    league: str
+    is_finished: bool = False
+    odds: Dict[str, float] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "match_id": self.match_id,
+            "home_team": self.home_team,
+            "away_team": self.away_team,
+            "league": self.league,
+            "is_finished": self.is_finished,
+            "odds": self.odds,
+            "timestamp": self.timestamp.isoformat()
         }

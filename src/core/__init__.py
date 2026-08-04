@@ -8,7 +8,7 @@ from .scorer import OpportunityScorer
 from .value_betting import ValueBetDetector
 from .dutching import DutchingCalculator
 from .bankroll import BankrollManager
-from .market_handlers import MarketHandler, HandlerFactory
+from .market_handlers import BaseMarketHandler, MarketHandlerFactory
 from .probability_model import ProbabilityModel, HistoricalModel, EloModel
 from .poisson_model import PoissonModel
 
@@ -18,8 +18,8 @@ __all__ = [
     'ValueBetDetector',
     'DutchingCalculator',
     'BankrollManager',
-    'MarketHandler',
-    'HandlerFactory',
+    'BaseMarketHandler',
+    'MarketHandlerFactory',
     'ProbabilityModel',
     'HistoricalModel',
     'EloModel',

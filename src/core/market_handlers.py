@@ -547,9 +547,27 @@ class MarketHandlerFactory:
         return None
     
     @classmethod
-    def get_supported_markets(cls) -> List[str]:
-        """Retorna lista de mercados soportados"""
-        return list(cls._handlers.keys())
+    def get_supported_markets(cls) -> List[MarketType]:
+        """
+        Retorna lista de mercados soportados como objetos MarketType.
+        ✅ CORREGIDO: Ahora retorna MarketType, no strings.
+        """
+        # Mapeo de nombre de mercado a MarketType
+        market_type_map = {
+            "1X2": MarketType.ODDS_1X2,
+            "Over/Under": MarketType.OVER_UNDER,
+            "Asian Handicap": MarketType.ASIAN_HANDICAP,
+            "Double Chance": MarketType.DOUBLE_CHANCE,
+            "Tennis Winner": MarketType.TENNIS_WINNER,
+            "Tennis Set Handicap": MarketType.TENNIS_SET_HANDICAP,
+            "Tennis Total Games": MarketType.TENNIS_TOTAL_GAMES,
+            "Basketball Moneyline": MarketType.BASKETBALL_MONEYLINE,
+            "Basketball Spread": MarketType.BASKETBALL_SPREAD,
+            "Basketball Total Points": MarketType.BASKETBALL_TOTAL_POINTS,
+            "Basketball Quarter Winner": MarketType.BASKETBALL_QUARTER_WINNER,
+        }
+        
+        return [market_type_map[name] for name in cls._handlers.keys() if name in market_type_map]
     
     @classmethod
     def register_handler(cls, market_type: str, handler_class):

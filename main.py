@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 QuantBet - Sistema de Arbitraje Deportivo Automatizado
-CLI Principal - v0.3.3
+CLI Principal - v0.3.3 (CORREGIDO - Opción A)
 
 Uso:
     python main.py --mode all --source csv
@@ -35,7 +35,7 @@ from src.core.bankroll import BankrollManager
 from src.connectors.csv_provider import CSVProvider
 from src.connectors.web_provider import WebProvider
 from src.connectors.factory import ConnectorFactory
-from src.domain.entities import Event, Market, Opportunity
+from src.domain.entities import Event, Market, Opportunity, Snapshot
 
 # Cargar configuración
 config = ConfigLoader().config
@@ -47,7 +47,7 @@ def run_arbitrage(events: List[Dict]) -> List[Dict]:
     Ejecutar motor de arbitraje
     
     Args:
-        events: Lista de eventos
+        events: Lista de eventos (diccionarios)
     
     Returns:
         Lista de oportunidades de arbitraje
@@ -71,7 +71,7 @@ def run_value_betting(events: List[Dict]) -> List[Dict]:
     Ejecutar detector de value betting
     
     Args:
-        events: Lista de eventos
+        events: Lista de eventos (diccionarios)
     
     Returns:
         Lista de oportunidades de value betting
@@ -95,7 +95,7 @@ def run_dutching(events: List[Dict]) -> List[Dict]:
     Ejecutar calculador de dutching
     
     Args:
-        events: Lista de eventos
+        events: Lista de eventos (diccionarios)
     
     Returns:
         Lista de oportunidades de dutching
@@ -123,27 +123,31 @@ def run_pipeline(
         source: Fuente de datos (csv | web)
         mode: Modo de ejecución (all | arbitrage | value | dutching)
         save: Guardar resultados en BD
-        limit: Límite de eventos a procesar
+        limit: Límite de snapshots a procesar
     
     Returns:
         Diccionario con resultados
     """
     logger.info(f"🚀 Iniciando pipeline con fuente: {source}, modo: {mode}")
     
-    # 1. Obtener datos
+    # 1. Obtener datos (Snapshots inmutables)
     provider = ConnectorFactory.create(source, config)
-    events = provider.fetch_events()
+    snapshots = provider.fetch_snapshots()
     
-    if not events:
-        logger.error("❌ No se obtuvieron eventos")
-        return {"error": "No se obtuvieron eventos"}
+    if not snapshots:
+        logger.error("❌ No se obtuvieron snapshots")
+        return {"error": "No se obtuvieron snapshots"}
     
     if limit:
-        events = events[:limit]
+        snapshots = snapshots[:limit]
     
-    logger.info(f"📥 Obtenidos {len(events)} eventos")
+    logger.info(f"📥 Obtenidos {len(snapshots)} snapshots")
     
-    # 2. Ejecutar estrategias
+    # 2. Convertir Snapshots a diccionarios (para las estrategias)
+    #    El motor no conoce la fuente (Principio #2)
+    events = [s.to_dict() for s in snapshots]
+    
+    # 3. Ejecutar estrategias
     strategies = config.get("strategies", {})
     all_opportunities = []
     results = {}
@@ -163,19 +167,22 @@ def run_pipeline(
         all_opportunities.extend(opps)
         results["dutching"] = len(opps)
     
-    # 3. Guardar en base de datos
+    # 4. Guardar en base de datos (Snapshots inmutables - Principio #3)
     if save and all_opportunities:
         repo = Repository()
+        # Guardar snapshots en la tabla correspondiente
         snapshot_id = repo.save_snapshot(events, source)
+        # Guardar oportunidades generadas
         repo.save_opportunities(all_opportunities, snapshot_id)
         logger.info(f"💾 Guardados {len(all_opportunities)} oportunidades en BD")
         results["snapshot_id"] = snapshot_id
     
     results["total_opportunities"] = len(all_opportunities)
     results["events_processed"] = len(events)
+    results["snapshots_processed"] = len(snapshots)
     results["opportunities"] = all_opportunities
     
-    # 4. Mostrar resumen
+    # 5. Mostrar resumen
     print_summary(results)
     
     return results
@@ -186,7 +193,8 @@ def print_summary(results: Dict[str, Any]):
     print("\n" + "="*60)
     print("📊 RESUMEN DE EJECUCIÓN")
     print("="*60)
-    print(f"📥 Eventos procesados: {results.get('events_processed', 0)}")
+    print(f"📥 Snapshots procesados: {results.get('snapshots_processed', 0)}")
+    print(f"📊 Eventos procesados: {results.get('events_processed', 0)}")
     print(f"🎯 Total oportunidades: {results.get('total_opportunities', 0)}")
     
     if "arbitrage" in results:
@@ -425,7 +433,7 @@ Ejemplos:
         "--limit",
         type=int,
         metavar="N",
-        help="Límite de eventos a procesar"
+        help="Límite de snapshots a procesar"
     )
     
     parser.add_argument(

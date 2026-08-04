@@ -1,5 +1,6 @@
 """
 Puntuador de oportunidades con soporte multi-mercado.
+Versión: 0.3.3 (Corregido)
 """
 
 from typing import List, Dict, Any
@@ -11,16 +12,16 @@ from src.logger import get_logger
 logger = get_logger(__name__)
 
 
-class Scorer:
+class OpportunityScorer:
     """Puntuador de oportunidades 0-100."""
     
     def __init__(self):
         self.weights = {
-            'arbitrage_percent': 0.50,
+            'profit_percent': 0.50,
             'liquidity': 0.25,
             'market_complexity': 0.25
         }
-        logger.info("Scorer inicializado con pesos: %s", self.weights)
+        logger.info("OpportunityScorer inicializado con pesos: %s", self.weights)
     
     def score_opportunity(self, opportunity: Opportunity) -> ScoredOpportunity:
         """
@@ -35,11 +36,15 @@ class Scorer:
         reasoning = []
         score = 0.0
         
-        # 1. Factor: % de arbitraje
-        arb_score = min(opportunity.arbitrage_percent / 10.0, 1.0) * 100
-        weighted_arb = arb_score * self.weights['arbitrage_percent']
-        score += weighted_arb
-        reasoning.append(f"Arbitraje {opportunity.arbitrage_percent:.2f}% -> {arb_score:.1f}pts (peso {self.weights['arbitrage_percent']*100:.0f}%)")
+        # 1. Factor: % de beneficio (usar profit_percent o arbitrage_percent)
+        profit = getattr(opportunity, 'profit_percent', 0.0)
+        if profit == 0 and hasattr(opportunity, 'arbitrage_percent'):
+            profit = opportunity.arbitrage_percent
+        
+        profit_score = min(profit / 10.0, 1.0) * 100
+        weighted_profit = profit_score * self.weights['profit_percent']
+        score += weighted_profit
+        reasoning.append(f"Beneficio {profit:.2f}% -> {profit_score:.1f}pts (peso {self.weights['profit_percent']*100:.0f}%)")
         
         # 2. Factor: liquidez (simulado por ahora)
         liquidity_score = 50.0  # Default
@@ -48,16 +53,29 @@ class Scorer:
         reasoning.append(f"Liquidez simulada -> {liquidity_score:.1f}pts (peso {self.weights['liquidity']*100:.0f}%)")
         
         # 3. Factor: complejidad del mercado
+        market_type = opportunity.market_type
+        if isinstance(market_type, MarketType):
+            market_key = market_type.value
+        else:
+            market_key = str(market_type)
+        
         complexity_scores = {
-            MarketType.MERCADO_1X2: 80.0,      # Fácil
-            MarketType.DOUBLE_CHANCE: 70.0,    # Medio-fácil
-            MarketType.OVER_UNDER: 60.0,       # Medio
-            MarketType.ASIAN_HANDICAP: 40.0,   # Complejo
+            "1X2": 80.0,
+            "Double Chance": 70.0,
+            "Over/Under": 60.0,
+            "Asian Handicap": 40.0,
+            "Tennis Winner": 75.0,
+            "Tennis Set Handicap": 45.0,
+            "Tennis Total Games": 55.0,
+            "Basketball Moneyline": 80.0,
+            "Point Spread": 50.0,
+            "Total Points": 60.0,
+            "Quarter Winner": 65.0,
         }
-        complexity_score = complexity_scores.get(opportunity.market_type, 50.0)
+        complexity_score = complexity_scores.get(market_key, 50.0)
         weighted_complexity = complexity_score * self.weights['market_complexity']
         score += weighted_complexity
-        reasoning.append(f"Complejidad {opportunity.market_type.value} -> {complexity_score:.1f}pts (peso {self.weights['market_complexity']*100:.0f}%)")
+        reasoning.append(f"Complejidad {market_key} -> {complexity_score:.1f}pts (peso {self.weights['market_complexity']*100:.0f}%)")
         
         # Normalizar a 0-100
         final_score = min(score, 100.0)
@@ -84,7 +102,7 @@ class Scorer:
         
         Args:
             opportunities: Lista de oportunidades
-            threshold: Umbral mínimo de % de arbitraje
+            threshold: Umbral mínimo de % de beneficio
             
         Returns:
             Lista de oportunidades puntuadas
@@ -92,12 +110,17 @@ class Scorer:
         scored = []
         
         for opp in opportunities:
+            # Obtener el beneficio correcto
+            profit = getattr(opp, 'profit_percent', 0.0)
+            if profit == 0 and hasattr(opp, 'arbitrage_percent'):
+                profit = opp.arbitrage_percent
+            
             # Filtrar por umbral
-            if opp.arbitrage_percent >= threshold:
+            if profit >= threshold:
                 scored.append(self.score_opportunity(opp))
             else:
                 logger.debug("Oportunidad descartada por umbral: %.2f%% < %.2f%%", 
-                           opp.arbitrage_percent, threshold)
+                           profit, threshold)
         
         # Ordenar por puntuación
         scored.sort(key=lambda x: x.score, reverse=True)

@@ -6,7 +6,7 @@ Reglas implícitas (no necesito repetirlas):
 
 Tienes autorización total para leer el repositorio completo en GitHub: https://github.com/viensa90/QuantBet
 
-"CREAR" = archivo nuevo | "REEMPLAZAR" = sobrescribir archivo existente (pásame contenido completo)
+"CREAR" = archivo nuevo | "REEMPLAZAR" = sobrescribir archivo existente (pásame contenido completo pero siempre escanea y analiza linea por linea como pre-ejecución, no escribas o modifiques una sola linea de código sin estar completamente seguro)
 
 Al final de cada sesión, actualiza este diario con el mismo formato
 

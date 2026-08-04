@@ -25,12 +25,12 @@ class MarketType(Enum):
     
     # Baloncesto
     BASKETBALL_MONEYLINE = "Basketball Moneyline"
-    BASKETBALL_SPREAD = "Point Spread"
-    BASKETBALL_TOTAL = "Total Points"
-    BASKETBALL_QUARTER = "Quarter Winner"
+    BASKETBALL_SPREAD = "Basketball Spread"
+    BASKETBALL_TOTAL_POINTS = "Basketball Total Points"
+    BASKETBALL_QUARTER_WINNER = "Basketball Quarter Winner"
     
-    # Aliases para compatibilidad
-    MERCADO_1X2 = ODDS_1X2  # Para código antiguo
+    # Aliases para compatibilidad (código antiguo)
+    MERCADO_1X2 = ODDS_1X2
 
 
 @dataclass
@@ -61,7 +61,7 @@ class Opportunity:
     """Oportunidad de arbitraje detectada"""
     event_id: str
     market_type: str
-    profit_percent: float       # ← Nombre correcto
+    profit_percent: float
     odds: Dict[str, float]
     stakes: Dict[str, float]
     source: str
@@ -70,7 +70,6 @@ class Opportunity:
     arbitrage_percent: float = None
     
     def __post_init__(self):
-        # Si no se proporciona arbitrage_percent, usar profit_percent
         if self.arbitrage_percent is None:
             self.arbitrage_percent = self.profit_percent
     
@@ -176,6 +175,8 @@ class Decision:
             "timestamp": self.timestamp.isoformat(),
             "executed": self.executed
         }
+
+
 # ============================================================
 # Clases para compatibilidad con main.py y otros módulos
 # ============================================================

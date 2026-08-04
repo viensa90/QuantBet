@@ -30,11 +30,11 @@ from src.storage.repository import Repository
 from src.core.arbitrage import ArbitrageEngine
 from src.core.value_betting import ValueBetDetector
 from src.core.dutching import DutchingCalculator
-from src.core.scorer import Scorer
+from src.core.scorer import OpportunityScorer
 from src.core.bankroll import BankrollManager
 from src.connectors.csv_provider import CSVProvider
 from src.connectors.web_provider import WebProvider
-from src.connectors.factory import ProviderFactory
+from src.connectors.factory import ConnectorFactory
 from src.domain.entities import Event, Market, Opportunity
 
 # Cargar configuración
@@ -131,7 +131,7 @@ def run_pipeline(
     logger.info(f"🚀 Iniciando pipeline con fuente: {source}, modo: {mode}")
     
     # 1. Obtener datos
-    provider = ProviderFactory.get_provider(source)
+    provider = ConnectorFactory.create(source, config)
     events = provider.fetch_events()
     
     if not events:

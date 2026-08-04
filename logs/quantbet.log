@@ -1,0 +1,3 @@
+{"timestamp": "2026-08-04T19:53:45.977887", "level": "INFO", "logger": "quantbet", "message": "\ud83d\ude80 Iniciando pipeline con fuente: csv, modo: all", "module": "main", "function": "run_pipeline", "line": 131, "thread": "MainThread", "process": 26720}
+{"timestamp": "2026-08-04T19:53:45.994016", "level": "INFO", "logger": "src.connectors.factory", "message": "Creando conector de tipo: csv", "module": "factory", "function": "create", "line": 30, "thread": "MainThread", "process": 26720}
+{"timestamp": "2026-08-04T19:53:45.994016", "level": "ERROR", "logger": "quantbet", "message": "\u274c Error inesperado: 'CSVProvider' object has no attribute 'fetch_events'", "module": "main", "function": "main", "line": 548, "thread": "MainThread", "process": 26720}

@@ -176,3 +176,47 @@ class Decision:
             "timestamp": self.timestamp.isoformat(),
             "executed": self.executed
         }
+# ============================================================
+# Clases para compatibilidad con main.py y otros módulos
+# ============================================================
+
+@dataclass
+class Event:
+    """
+    Representación de un evento deportivo.
+    Usado principalmente para type hints y compatibilidad.
+    """
+    event_id: str
+    event_name: str
+    market_type: str
+    odds: Dict[str, float]
+    sport: str = ""
+    timestamp: Optional[datetime] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "event_id": self.event_id,
+            "event_name": self.event_name,
+            "market_type": self.market_type,
+            "odds": self.odds,
+            "sport": self.sport,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None
+        }
+
+
+@dataclass
+class Market:
+    """
+    Representación de un mercado deportivo.
+    Usado principalmente para type hints y compatibilidad.
+    """
+    market_type: str
+    sport: str
+    enabled: bool = True
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "market_type": self.market_type,
+            "sport": self.sport,
+            "enabled": self.enabled
+        }

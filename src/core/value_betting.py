@@ -27,8 +27,7 @@ class ValueBetDetector:
         self.model = ProbabilityModelFactory.create(model_type, self.model_config)
         logger.info("ValueBetDetector inicializado con modelo %s", model_type)
     
-    def detect_value_bets(self, snapshots: List[Snapshot], 
-                          min_value_threshold: float = 0.05) -> List[ValueBet]:
+    def detect_value_bets(self, snapshots: List[Snapshot], min_value_threshold: float = 0.05) -> List[ValueBet]:
         """
         Detecta value bets en los snapshots.
         
@@ -42,10 +41,17 @@ class ValueBetDetector:
         value_bets = []
         
         for snapshot in snapshots:
+            # ✅ Convertir market_type de str a MarketType
+            try:
+                market_type_enum = MarketType(snapshot.market_type)
+            except ValueError:
+                logger.warning(f"Tipo de mercado no reconocido: {snapshot.market_type}")
+                continue
+            
             # Calcular probabilidades justas
             fair_probs = self.model.calculate_probabilities(
                 snapshot.event_id,
-                snapshot.market_type,
+                market_type_enum,  # ✅ Ahora es un MarketType
                 snapshot.metadata
             )
             
@@ -53,7 +59,7 @@ class ValueBetDetector:
                 continue
             
             # Calcular valor para cada resultado
-            for outcome, odds in snapshot.odds.items():
+            for outcome, odds in snapshot.odds_data.items():
                 if outcome not in fair_probs:
                     continue
                 
@@ -66,26 +72,25 @@ class ValueBetDetector:
                 if value_percent >= min_value_threshold:
                     value_bet = ValueBet(
                         event_id=snapshot.event_id,
-                        event_name=snapshot.event_name,
-                        source=snapshot.source,
                         market_type=snapshot.market_type,
-                        outcome=outcome,
-                        fair_probability=fair_prob,
-                        actual_odds=odds,
-                        value_percent=value_percent,
-                        timestamp=snapshot.timestamp,
-                        metadata=snapshot.metadata
+                        selection=outcome,
+                        odds=odds,
+                        implied_prob=actual_prob,
+                        fair_prob=fair_prob,
+                        value=value_percent,
+                        edge_percent=value_percent * 100,
+                        score=value_percent * 100
                     )
                     value_bets.append(value_bet)
         
         # Ordenar por valor (mayor primero)
-        value_bets.sort(key=lambda x: x.value_percent, reverse=True)
+        value_bets.sort(key=lambda x: x.value, reverse=True)
         
         if value_bets:
             logger.info("Detectados %d value bets", len(value_bets))
             top = value_bets[0]
             logger.debug("Top value bet: %s - %s con valor %.2f%%", 
-                        top.event_id, top.outcome, top.value_percent * 100)
+                        top.event_id, top.selection, top.value * 100)
         
         return value_bets
     
@@ -99,8 +104,15 @@ class ValueBetDetector:
         Returns:
             Diccionario {resultado: probabilidad}
         """
+        # ✅ Convertir market_type de str a MarketType
+        try:
+            market_type_enum = MarketType(snapshot.market_type)
+        except ValueError:
+            logger.warning(f"Tipo de mercado no reconocido: {snapshot.market_type}")
+            return {}
+        
         return self.model.calculate_probabilities(
             snapshot.event_id,
-            snapshot.market_type,
+            market_type_enum,  # ✅ Ahora es un MarketType
             snapshot.metadata
         )

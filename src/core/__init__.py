@@ -1,6 +1,6 @@
 """
 QuantBet - Motor de Estrategias y Puntuación
-Versión: 0.3.3 (Corregido)
+Versión: 0.3.3 (Completo)
 """
 
 from .arbitrage import ArbitrageEngine
@@ -9,7 +9,7 @@ from .value_betting import ValueBetDetector
 from .dutching import DutchingCalculator
 from .bankroll import BankrollManager
 from .market_handlers import BaseMarketHandler, MarketHandlerFactory
-from .probability_model import ProbabilityModel, HistoricalModel, EloModel
+from .probability_model import ProbabilityModel, HistoricalModel, EloModel, ProbabilityModelFactory
 from .poisson_model import PoissonModel
 
 __all__ = [
@@ -23,5 +23,6 @@ __all__ = [
     'ProbabilityModel',
     'HistoricalModel',
     'EloModel',
+    'ProbabilityModelFactory',
     'PoissonModel'
 ]

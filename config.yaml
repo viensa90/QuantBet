@@ -104,3 +104,10 @@ logs:
   console:
     enabled: true
     color: true
+
+# ... (configuración existente) ...
+
+# --- Dutching ---
+dutching:
+  total_stake: 100.0           # Stake total a repartir
+  min_profit_margin: 0.0       # Margen mínimo en % (0 = cualquier oportunidad)

@@ -94,22 +94,37 @@ def run_value_betting(snapshots: List[Snapshot]) -> List[Dict]:
     
     return result
 
-
 def run_dutching(snapshots: List[Snapshot]) -> List[Dict]:
     """
-    Ejecutar calculador de dutching sobre snapshots.
-    NOTA: DutchingCalculator tiene una interfaz diferente (calcula sobre selecciones, no sobre snapshots).
-    Esta función es un placeholder hasta que se implemente la integración completa.
+    Ejecutar calculador de Dutching sobre snapshots.
+    
+    Args:
+        snapshots: Lista de Snapshots inmutables
+    
+    Returns:
+        Lista de oportunidades de Dutching (diccionarios)
     """
     logger.info("📊 Ejecutando calculador de dutching...")
     
-    calculator = DutchingCalculator()
-    opportunities = []
-    # TODO: Implementar lógica de Dutching con la interfaz correcta
-    logger.warning("⚠️ Dutching no implementado completamente con la nueva interfaz")
+    # Configuración desde config.yaml
+    dutching_config = config.get("dutching", {})
+    total_stake = dutching_config.get("total_stake", 100.0)
+    min_profit_margin = dutching_config.get("min_profit_margin", 0.0) / 100.0  # Convertir %
     
-    return opportunities
-
+    calculator = DutchingCalculator(
+        total_stake=total_stake,
+        min_profit_margin=min_profit_margin
+    )
+    
+    # Detectar oportunidades de Dutching
+    opportunities = calculator.detect_opportunities(snapshots)
+    
+    # Convertir a dict
+    result = [opp.to_dict() for opp in opportunities]
+    
+    logger.info(f"✅ Dutching: {len(result)} oportunidades encontradas")
+    
+    return result
 
 def run_pipeline(
     source: str = "csv",

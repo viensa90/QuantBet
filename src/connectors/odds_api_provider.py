@@ -1,6 +1,6 @@
 """
 Conector para The Odds API (the-odds-api.com)
-Proporciona cuotas de múltiples bookmakers, incluyendo Pinnacle y Betfair.
+Proporciona cuotas de múltiples bookmakers.
 """
 import logging
 from typing import List, Optional, Dict, Any
@@ -71,41 +71,36 @@ class OddsAPIProvider(IDataProvider):
             return name.lower().replace(" ", "_")
 
     def fetch_snapshots(self, limit: Optional[int] = None) -> List[Snapshot]:
-        snapshots = []
-        total_requests = 0
-
+        all_snapshots = []
         for sport_key in self.sports:
             for bookmaker in self.bookmakers:
+                logger.info("Requesting %s from %s", sport_key, bookmaker)
                 url = f"{self.base_url}/sports/{sport_key}/odds/"
                 params = {
                     "apiKey": self.api_key,
                     "regions": self.regions,
                     "markets": self.markets,
-                    "bookmakers": bookmaker,       # un solo bookmaker por llamada
+                    "bookmakers": bookmaker,
                     "oddsFormat": "decimal",
                 }
                 try:
                     response = self._session.get(url, params=params, timeout=15)
                     response.raise_for_status()
                     data = response.json()
-                    total_requests += 1
-                    logger.info(f"Odds API: obtained {len(data)} events for {sport_key} from {bookmaker}")
-                except requests.RequestException as e:
-                    logger.error(f"Error fetching {bookmaker} for {sport_key}: {e}")
+                    logger.info("Got %d events for %s/%s", len(data), bookmaker, sport_key)
+                except Exception as e:
+                    logger.error("Error on %s/%s: %s", bookmaker, sport_key, e)
                     continue
 
                 for event in data:
-                    event_id = event.get("id")
                     home_team = event.get("home_team", "")
                     away_team = event.get("away_team", "")
                     commence_time = event.get("commence_time")
+                    event_id = event.get("id")
 
-                    # Algunos eventos pueden no tener bookmakers (caso raro)
                     for bm in event.get("bookmakers", []):
-                        bm_key = bm.get("key")
-                        if bm_key != bookmaker:
+                        if bm.get("key") != bookmaker:
                             continue
-
                         for market in bm.get("markets", []):
                             market_key = market.get("key")
                             market_type_str = MARKET_TYPE_VALUES.get(market_key, {}).get(sport_key)
@@ -113,8 +108,7 @@ class OddsAPIProvider(IDataProvider):
                                 continue
 
                             odds_data = {}
-                            outcomes = market.get("outcomes", [])
-                            for outcome in outcomes:
+                            for outcome in market.get("outcomes", []):
                                 name = outcome.get("name")
                                 price = outcome.get("price")
                                 point = outcome.get("point")
@@ -128,20 +122,15 @@ class OddsAPIProvider(IDataProvider):
                                 event_id=event_id,
                                 event_name=f"{home_team} vs {away_team}",
                                 market_type=market_type_str,
-                                bookmaker=bm_key,
+                                bookmaker=bookmaker,
                                 odds_data=odds_data,
                                 timestamp=datetime.now(timezone.utc),
                                 source="oddsapi",
-                                metadata={
-                                    "commence_time": commence_time,
-                                    "sport_key": sport_key,
-                                }
+                                metadata={"commence_time": commence_time, "sport_key": sport_key}
                             )
-                            snapshots.append(snap)
+                            all_snapshots.append(snap)
 
-                            if limit and len(snapshots) >= limit:
-                                logger.info(f"Total API requests made: {total_requests}")
-                                return snapshots[:limit]
-
-        logger.info(f"Total API requests made: {total_requests}")
-        return snapshots
+        # Aplicar límite solo al final
+        if limit and len(all_snapshots) > limit:
+            return all_snapshots[:limit]
+        return all_snapshots

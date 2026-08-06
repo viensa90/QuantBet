@@ -5,39 +5,29 @@ Proporciona cuotas de múltiples bookmakers, incluyendo Pinnacle.
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
-from collections import namedtuple
 import requests
 
 from src.connectors.base import IDataProvider
-from src.domain.entities import Snapshot, Market, MarketType
+from src.domain.entities import Snapshot
 
 logger = logging.getLogger(__name__)
 
-Selection = namedtuple("Selection", ["name", "odds"])
-
-SPORT_MAP = {
-    "soccer": "Football",
-    "tennis": "Tennis",
-    "basketball": "Basketball",
-}
-
-# Mapeo API -> (valor del MarketType) en lugar de atributo
-# Así no dependemos del nombre exacto del miembro (ONE_X_TWO, MATCH_ODDS, etc.)
-MARKET_TYPE_VALUE_MAP = {
+# Mapeo API -> string del market_type (debe coincidir con los valores de MarketType)
+MARKET_TYPE_VALUES = {
     "h2h": {
         "soccer": "1X2",
         "tennis": "Tennis Winner",
         "basketball": "Basketball Moneyline",
     },
     "totals": {
-        "soccer": "Over/Under 2.5",
-        "tennis": "Total Games",
-        "basketball": "Total Points",
+        "soccer": "Over/Under",
+        "tennis": "Tennis Total Games",
+        "basketball": "Basketball Total Points",
     },
     "spreads": {
         "soccer": "Asian Handicap",
-        "tennis": "Set Handicap",
-        "basketball": "Point Spread",
+        "tennis": "Tennis Set Handicap",
+        "basketball": "Basketball Spread",
     },
 }
 
@@ -53,18 +43,34 @@ class OddsAPIProvider(IDataProvider):
         self.base_url = config.get("base_url", "https://api.the-odds-api.com/v4")
         self._session = requests.Session()
 
-    def _get_market_type(self, market_key: str, sport_key: str) -> Optional[MarketType]:
-        """Obtiene el MarketType a partir del valor del enum."""
-        value_map = MARKET_TYPE_VALUE_MAP.get(market_key)
-        if not value_map:
-            return None
-        value = value_map.get(sport_key)
-        if not value:
-            return None
-        try:
-            return MarketType(value)      # Busca por valor
-        except ValueError:
-            return None
+    def get_provider_name(self) -> str:
+        return "TheOddsAPI"
+
+    def validate_config(self) -> bool:
+        return bool(self.api_key and self.sports and self.bookmakers)
+
+    def _translate_selection(self, market_key: str, name: str, home: str, away: str, point: Optional[float]) -> str:
+        """Traduce el nombre del outcome a nuestra nomenclatura estándar."""
+        if market_key == "h2h":
+            if name == home:
+                return "home"
+            elif name == away:
+                return "away"
+            elif name == "Draw":
+                return "draw"
+            else:
+                return name.lower()
+        elif market_key == "totals":
+            if "Over" in name:
+                return f"over_{point}"
+            elif "Under" in name:
+                return f"under_{point}"
+            else:
+                return name.lower().replace(" ", "_")
+        elif market_key == "spreads":
+            return name.lower().replace(" ", "_")
+        else:
+            return name.lower().replace(" ", "_")
 
     def fetch_snapshots(self, limit: Optional[int] = None) -> List[Snapshot]:
         snapshots = []
@@ -86,15 +92,11 @@ class OddsAPIProvider(IDataProvider):
                 logger.error(f"Error fetching odds for {sport_key}: {e}")
                 continue
 
-            sport_name = SPORT_MAP.get(sport_key)
-            if not sport_name:
-                continue
-
             for event in data:
+                event_id = event.get("id")
                 home_team = event.get("home_team", "")
                 away_team = event.get("away_team", "")
                 commence_time = event.get("commence_time")
-                event_id = event.get("id")
 
                 for bookmaker in event.get("bookmakers", []):
                     bookmaker_key = bookmaker.get("key")
@@ -103,56 +105,34 @@ class OddsAPIProvider(IDataProvider):
 
                     for market in bookmaker.get("markets", []):
                         market_key = market.get("key")
-                        market_type = self._get_market_type(market_key, sport_key)
-                        if not market_type:
+                        market_type_str = MARKET_TYPE_VALUES.get(market_key, {}).get(sport_key)
+                        if not market_type_str:
                             continue
 
-                        selections = []
+                        # Construir odds_data
+                        odds_data = {}
                         outcomes = market.get("outcomes", [])
                         for outcome in outcomes:
                             name = outcome.get("name")
                             price = outcome.get("price")
                             point = outcome.get("point")
+                            sel_name = self._translate_selection(market_key, name, home_team, away_team, point)
+                            odds_data[sel_name] = price
 
-                            if market_key == "h2h":
-                                if name == home_team:
-                                    sel_name = "home"
-                                elif name == away_team:
-                                    sel_name = "away"
-                                elif name == "Draw":
-                                    sel_name = "draw"
-                                else:
-                                    sel_name = name.lower()
-                            elif market_key == "totals":
-                                if "Over" in name:
-                                    sel_name = f"over_{point}"
-                                elif "Under" in name:
-                                    sel_name = f"under_{point}"
-                                else:
-                                    sel_name = name.lower().replace(" ", "_")
-                            elif market_key == "spreads":
-                                sel_name = name.lower().replace(" ", "_")
-                            else:
-                                sel_name = name.lower().replace(" ", "_")
-
-                            selections.append(Selection(name=sel_name, odds=price))
-
-                        market_obj = Market(
-                            market_type=market_type,
-                            selections=selections,
-                            parameters={"point": outcomes[0].get("point") if outcomes else None}
-                        )
+                        if not odds_data:
+                            continue
 
                         snap = Snapshot(
-                            sport=sport_name,
+                            event_id=event_id,
                             event_name=f"{home_team} vs {away_team}",
-                            market=market_obj,
+                            market_type=market_type_str,
+                            bookmaker=bookmaker_key,
+                            odds_data=odds_data,
                             timestamp=datetime.now(timezone.utc),
                             source="oddsapi",
                             metadata={
-                                "event_id": event_id,
-                                "bookmaker": bookmaker_key,
                                 "commence_time": commence_time,
+                                "sport_key": sport_key,
                             }
                         )
                         snapshots.append(snap)

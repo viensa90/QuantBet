@@ -60,7 +60,7 @@ web_provider:
 odds_api:
   api_key: "87940a0e14d31637dc751fd8e47b38eb"   # <-- REEMPLAZAR con tu clave
   sports: ["soccer", "tennis", "basketball"]
-  bookmakers: ["pinnacle", "betfair"]
+  bookmakers: ["pinnacle", "bovada", "onexbet", "williamhill", "unibet", "betway"]
   regions: "eu"
   markets: "h2h,totals"
   base_url: "https://api.the-odds-api.com/v4"

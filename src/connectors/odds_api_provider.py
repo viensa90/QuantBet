@@ -21,10 +21,10 @@ SPORT_MAP = {
     "basketball": "Basketball",
 }
 
-# Mapeo API -> MarketType, por deporte
+# Mapeo de mercados de la API -> MarketType, dependiendo del deporte
 MARKET_KEY_MAP = {
     "h2h": {
-        "soccer": MarketType.MATCH_ODDS,
+        "soccer": MarketType.ONE_X_TWO,
         "tennis": MarketType.TENNIS_WINNER,
         "basketball": MarketType.BASKETBALL_MONEYLINE,
     },

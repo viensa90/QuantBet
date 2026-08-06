@@ -433,7 +433,7 @@ Ejemplos:
     
     parser.add_argument(
         "--source",
-        choices=["csv", "web"],
+        choices=["csv", "web", "oddsapi"],
         default="csv",
         help="Fuente de datos (default: csv)"
     )

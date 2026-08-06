@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 from src.connectors.base import IDataProvider
 from src.connectors.csv_provider import CSVProvider
 from src.connectors.web_provider import WebProvider
+from src.connectors.odds_api_provider import OddsAPIProvider   # <-- NUEVO
 from src.logger import get_logger
 
 logger = get_logger(__name__)
@@ -21,7 +22,7 @@ class ConnectorFactory:
         Crea un proveedor de datos según el tipo.
         
         Args:
-            source_type: 'csv' o 'web'
+            source_type: 'csv', 'web' o 'oddsapi'
             config: Configuración completa del proyecto
             
         Returns:
@@ -36,6 +37,10 @@ class ConnectorFactory:
         elif source_type == 'web':
             web_config = config.get('web_scraping', {})
             return WebProvider(web_config)
+        
+        elif source_type == 'oddsapi':   # <-- NUEVO BLOQUE
+            odds_config = config.get('odds_api', {})
+            return OddsAPIProvider(odds_config)
             
         else:
             raise ValueError(f"Tipo de conector no soportado: {source_type}")

@@ -113,3 +113,4 @@
 {"timestamp": "2026-08-04T22:02:58.862355", "level": "INFO", "logger": "src.core.dutching", "message": "Dutching: detectadas 0 oportunidades", "module": "dutching", "function": "detect_opportunities", "line": 93, "thread": "MainThread", "process": 28880}
 {"timestamp": "2026-08-04T22:02:58.862355", "level": "INFO", "logger": "quantbet", "message": "\u2705 Dutching: 0 oportunidades encontradas", "module": "main", "function": "run_dutching", "line": 125, "thread": "MainThread", "process": 28880}
 {"timestamp": "2026-08-04T22:03:14.429710", "level": "INFO", "logger": "quantbet", "message": "\ud83d\udcca Obteniendo estad\u00edsticas...", "module": "main", "function": "show_stats", "line": 237, "thread": "MainThread", "process": 17804}
+{"timestamp": "2026-08-04T22:16:59.537244", "level": "INFO", "logger": "quantbet", "message": "\ud83c\udf10 Iniciando dashboard web...", "module": "main", "function": "main", "line": 513, "thread": "MainThread", "process": 21444}

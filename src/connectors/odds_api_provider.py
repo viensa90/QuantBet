@@ -1,6 +1,6 @@
 """
 Conector para The Odds API (the-odds-api.com)
-Proporciona cuotas de múltiples bookmakers, incluyendo Pinnacle.
+Proporciona cuotas de múltiples bookmakers, incluyendo Pinnacle y Betfair.
 """
 import logging
 from typing import List, Optional, Dict, Any
@@ -12,7 +12,6 @@ from src.domain.entities import Snapshot
 
 logger = logging.getLogger(__name__)
 
-# Mapeo API -> string del market_type (debe coincidir con los valores de MarketType)
 MARKET_TYPE_VALUES = {
     "h2h": {
         "soccer": "1X2",
@@ -50,7 +49,6 @@ class OddsAPIProvider(IDataProvider):
         return bool(self.api_key and self.sports and self.bookmakers)
 
     def _translate_selection(self, market_key: str, name: str, home: str, away: str, point: Optional[float]) -> str:
-        """Traduce el nombre del outcome a nuestra nomenclatura estándar."""
         if market_key == "h2h":
             if name == home:
                 return "home"
@@ -74,70 +72,76 @@ class OddsAPIProvider(IDataProvider):
 
     def fetch_snapshots(self, limit: Optional[int] = None) -> List[Snapshot]:
         snapshots = []
+        total_requests = 0
+
         for sport_key in self.sports:
-            url = f"{self.base_url}/sports/{sport_key}/odds/"
-            params = {
-                "apiKey": self.api_key,
-                "regions": self.regions,
-                "markets": self.markets,
-                "bookmakers": ",".join(self.bookmakers),
-                "oddsFormat": "decimal",
-            }
-            try:
-                response = self._session.get(url, params=params, timeout=15)
-                response.raise_for_status()
-                data = response.json()
-                logger.info(f"Odds API: obtained {len(data)} events for {sport_key}")
-            except requests.RequestException as e:
-                logger.error(f"Error fetching odds for {sport_key}: {e}")
-                continue
+            for bookmaker in self.bookmakers:
+                url = f"{self.base_url}/sports/{sport_key}/odds/"
+                params = {
+                    "apiKey": self.api_key,
+                    "regions": self.regions,
+                    "markets": self.markets,
+                    "bookmakers": bookmaker,       # un solo bookmaker por llamada
+                    "oddsFormat": "decimal",
+                }
+                try:
+                    response = self._session.get(url, params=params, timeout=15)
+                    response.raise_for_status()
+                    data = response.json()
+                    total_requests += 1
+                    logger.info(f"Odds API: obtained {len(data)} events for {sport_key} from {bookmaker}")
+                except requests.RequestException as e:
+                    logger.error(f"Error fetching {bookmaker} for {sport_key}: {e}")
+                    continue
 
-            for event in data:
-                event_id = event.get("id")
-                home_team = event.get("home_team", "")
-                away_team = event.get("away_team", "")
-                commence_time = event.get("commence_time")
+                for event in data:
+                    event_id = event.get("id")
+                    home_team = event.get("home_team", "")
+                    away_team = event.get("away_team", "")
+                    commence_time = event.get("commence_time")
 
-                for bookmaker in event.get("bookmakers", []):
-                    bookmaker_key = bookmaker.get("key")
-                    if bookmaker_key not in self.bookmakers:
-                        continue
-
-                    for market in bookmaker.get("markets", []):
-                        market_key = market.get("key")
-                        market_type_str = MARKET_TYPE_VALUES.get(market_key, {}).get(sport_key)
-                        if not market_type_str:
+                    # Algunos eventos pueden no tener bookmakers (caso raro)
+                    for bm in event.get("bookmakers", []):
+                        bm_key = bm.get("key")
+                        if bm_key != bookmaker:
                             continue
 
-                        # Construir odds_data
-                        odds_data = {}
-                        outcomes = market.get("outcomes", [])
-                        for outcome in outcomes:
-                            name = outcome.get("name")
-                            price = outcome.get("price")
-                            point = outcome.get("point")
-                            sel_name = self._translate_selection(market_key, name, home_team, away_team, point)
-                            odds_data[sel_name] = price
+                        for market in bm.get("markets", []):
+                            market_key = market.get("key")
+                            market_type_str = MARKET_TYPE_VALUES.get(market_key, {}).get(sport_key)
+                            if not market_type_str:
+                                continue
 
-                        if not odds_data:
-                            continue
+                            odds_data = {}
+                            outcomes = market.get("outcomes", [])
+                            for outcome in outcomes:
+                                name = outcome.get("name")
+                                price = outcome.get("price")
+                                point = outcome.get("point")
+                                sel_name = self._translate_selection(market_key, name, home_team, away_team, point)
+                                odds_data[sel_name] = price
 
-                        snap = Snapshot(
-                            event_id=event_id,
-                            event_name=f"{home_team} vs {away_team}",
-                            market_type=market_type_str,
-                            bookmaker=bookmaker_key,
-                            odds_data=odds_data,
-                            timestamp=datetime.now(timezone.utc),
-                            source="oddsapi",
-                            metadata={
-                                "commence_time": commence_time,
-                                "sport_key": sport_key,
-                            }
-                        )
-                        snapshots.append(snap)
+                            if not odds_data:
+                                continue
 
-                        if limit and len(snapshots) >= limit:
-                            return snapshots[:limit]
+                            snap = Snapshot(
+                                event_id=event_id,
+                                event_name=f"{home_team} vs {away_team}",
+                                market_type=market_type_str,
+                                bookmaker=bm_key,
+                                odds_data=odds_data,
+                                timestamp=datetime.now(timezone.utc),
+                                source="oddsapi",
+                                metadata={
+                                    "commence_time": commence_time,
+                                    "sport_key": sport_key,
+                                }
+                            )
+                            snapshots.append(snap)
 
+                            if limit and len(snapshots) >= limit:
+                                logger.info(f"Total API requests made: {total_requests}")
+                                return snapshots[:limit]
+
+        logger.info(f"Total API requests made: {total_requests}")
         return snapshots

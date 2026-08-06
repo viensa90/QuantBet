@@ -21,22 +21,23 @@ SPORT_MAP = {
     "basketball": "Basketball",
 }
 
-# Mapeo de mercados de la API -> MarketType, dependiendo del deporte
-MARKET_KEY_MAP = {
+# Mapeo API -> (valor del MarketType) en lugar de atributo
+# Así no dependemos del nombre exacto del miembro (ONE_X_TWO, MATCH_ODDS, etc.)
+MARKET_TYPE_VALUE_MAP = {
     "h2h": {
-        "soccer": MarketType.ONE_X_TWO,
-        "tennis": MarketType.TENNIS_WINNER,
-        "basketball": MarketType.BASKETBALL_MONEYLINE,
+        "soccer": "1X2",
+        "tennis": "Tennis Winner",
+        "basketball": "Basketball Moneyline",
     },
     "totals": {
-        "soccer": MarketType.OVER_UNDER_25,
-        "tennis": MarketType.TOTAL_GAMES,
-        "basketball": MarketType.TOTAL_POINTS,
+        "soccer": "Over/Under 2.5",
+        "tennis": "Total Games",
+        "basketball": "Total Points",
     },
     "spreads": {
-        "soccer": MarketType.ASIAN_HANDICAP,
-        "tennis": MarketType.SET_HANDICAP,
-        "basketball": MarketType.POINT_SPREAD,
+        "soccer": "Asian Handicap",
+        "tennis": "Set Handicap",
+        "basketball": "Point Spread",
     },
 }
 
@@ -51,6 +52,19 @@ class OddsAPIProvider(IDataProvider):
         self.markets = config.get("markets", "h2h,spreads,totals")
         self.base_url = config.get("base_url", "https://api.the-odds-api.com/v4")
         self._session = requests.Session()
+
+    def _get_market_type(self, market_key: str, sport_key: str) -> Optional[MarketType]:
+        """Obtiene el MarketType a partir del valor del enum."""
+        value_map = MARKET_TYPE_VALUE_MAP.get(market_key)
+        if not value_map:
+            return None
+        value = value_map.get(sport_key)
+        if not value:
+            return None
+        try:
+            return MarketType(value)      # Busca por valor
+        except ValueError:
+            return None
 
     def fetch_snapshots(self, limit: Optional[int] = None) -> List[Snapshot]:
         snapshots = []
@@ -89,10 +103,7 @@ class OddsAPIProvider(IDataProvider):
 
                     for market in bookmaker.get("markets", []):
                         market_key = market.get("key")
-                        sport_market_map = MARKET_KEY_MAP.get(market_key)
-                        if not sport_market_map:
-                            continue
-                        market_type = sport_market_map.get(sport_key)
+                        market_type = self._get_market_type(market_key, sport_key)
                         if not market_type:
                             continue
 

@@ -5,25 +5,39 @@ Proporciona cuotas de múltiples bookmakers, incluyendo Pinnacle.
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
+from collections import namedtuple
 import requests
 
 from src.connectors.base import IDataProvider
-from src.domain.entities import Snapshot, Market, Selection, Sport, MarketType
+from src.domain.entities import Snapshot, Market, MarketType
 
 logger = logging.getLogger(__name__)
 
-# Mapeo de deportes de The Odds API a nuestro modelo Sport
-SPORT_KEY_MAP = {
-    "soccer": Sport.FOOTBALL,
-    "tennis": Sport.TENNIS,
-    "basketball": Sport.BASKETBALL,
+Selection = namedtuple("Selection", ["name", "odds"])
+
+SPORT_MAP = {
+    "soccer": "Football",
+    "tennis": "Tennis",
+    "basketball": "Basketball",
 }
 
-# Mapeo de claves de mercado de la API a nuestro MarketType
+# Mapeo API -> MarketType, por deporte
 MARKET_KEY_MAP = {
-    "h2h": MarketType.ONE_X_TWO,      # 1X2 en fútbol, ganador en tenis/baloncesto
-    "totals": MarketType.OVER_UNDER,  # Over/Under totales
-    "spreads": MarketType.HANDICAP,   # Asian Handicap / Spreads
+    "h2h": {
+        "soccer": MarketType.MATCH_ODDS,
+        "tennis": MarketType.TENNIS_WINNER,
+        "basketball": MarketType.BASKETBALL_MONEYLINE,
+    },
+    "totals": {
+        "soccer": MarketType.OVER_UNDER_25,
+        "tennis": MarketType.TOTAL_GAMES,
+        "basketball": MarketType.TOTAL_POINTS,
+    },
+    "spreads": {
+        "soccer": MarketType.ASIAN_HANDICAP,
+        "tennis": MarketType.SET_HANDICAP,
+        "basketball": MarketType.POINT_SPREAD,
+    },
 }
 
 class OddsAPIProvider(IDataProvider):
@@ -58,8 +72,8 @@ class OddsAPIProvider(IDataProvider):
                 logger.error(f"Error fetching odds for {sport_key}: {e}")
                 continue
 
-            sport = SPORT_KEY_MAP.get(sport_key)
-            if not sport:
+            sport_name = SPORT_MAP.get(sport_key)
+            if not sport_name:
                 continue
 
             for event in data:
@@ -75,7 +89,10 @@ class OddsAPIProvider(IDataProvider):
 
                     for market in bookmaker.get("markets", []):
                         market_key = market.get("key")
-                        market_type = MARKET_KEY_MAP.get(market_key)
+                        sport_market_map = MARKET_KEY_MAP.get(market_key)
+                        if not sport_market_map:
+                            continue
+                        market_type = sport_market_map.get(sport_key)
                         if not market_type:
                             continue
 
@@ -84,7 +101,7 @@ class OddsAPIProvider(IDataProvider):
                         for outcome in outcomes:
                             name = outcome.get("name")
                             price = outcome.get("price")
-                            point = outcome.get("point")  # para totals/spreads
+                            point = outcome.get("point")
 
                             if market_key == "h2h":
                                 if name == home_team:
@@ -116,7 +133,7 @@ class OddsAPIProvider(IDataProvider):
                         )
 
                         snap = Snapshot(
-                            sport=sport,
+                            sport=sport_name,
                             event_name=f"{home_team} vs {away_team}",
                             market=market_obj,
                             timestamp=datetime.now(timezone.utc),

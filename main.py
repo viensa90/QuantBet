@@ -183,7 +183,11 @@ def run_pipeline(
     if save and all_opportunities:
         repo = Repository()
         events = [s.to_dict() for s in snapshots]
-        snapshot_id = repo.save_snapshot(events, source)
+        snapshot_id = repo.save_snapshot({
+            "events": events,
+            "source": source,
+            "timestamp": datetime.now().isoformat()
+        })
         repo.save_opportunities(all_opportunities, snapshot_id)
         logger.info(f"💾 Guardados {len(all_opportunities)} oportunidades en BD")
         results["snapshot_id"] = snapshot_id

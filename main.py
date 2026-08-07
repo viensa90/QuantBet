@@ -30,11 +30,11 @@ from src.storage.repository import Repository
 from src.core.arbitrage import ArbitrageEngine
 from src.core.value_betting import ValueBetDetector
 from src.core.dutching import DutchingCalculator
-from src.core.scorer import OpportunityScorer  # ✅ CORREGIDO
+from src.core.scorer import OpportunityScorer
 from src.core.bankroll import BankrollManager
 from src.connectors.csv_provider import CSVProvider
 from src.connectors.web_provider import WebProvider
-from src.connectors.factory import ConnectorFactory  # ✅ CORREGIDO
+from src.connectors.factory import ConnectorFactory
 from src.domain.entities import Event, Market, Opportunity, Snapshot
 
 # Cargar configuración
@@ -50,17 +50,15 @@ def run_arbitrage(snapshots: List[Snapshot]) -> List[Dict]:
         snapshots: Lista de Snapshots inmutables
     
     Returns:
-        Lista de oportunidades de arbitraje
+        Lista de oportunidades de arbitraje (dict)
     """
     logger.info("🔄 Ejecutando motor de arbitraje...")
     
     engine = ArbitrageEngine()
-    opportunities = engine.detect_opportunities(snapshots)  # ✅ CORREGIDO
+    opportunities = engine.detect_opportunities(snapshots)
     
-    # Convertir a dict para mantener compatibilidad
     result = [opp.to_dict() for opp in opportunities]
     
-    # Filtrar por umbral mínimo de beneficio
     min_profit = config.get("thresholds", {}).get("min_profit_percent", 1.5)
     result = [o for o in result if o.get("profit_percent", 0) >= min_profit]
     
@@ -77,22 +75,22 @@ def run_value_betting(snapshots: List[Snapshot]) -> List[Dict]:
         snapshots: Lista de Snapshots inmutables
     
     Returns:
-        Lista de oportunidades de value betting
+        Lista de oportunidades de value betting (dict)
     """
     logger.info("💎 Ejecutando detector de value betting...")
     
     detector = ValueBetDetector()
-    opportunities = detector.detect_value_bets(snapshots)  # ✅ CORREGIDO
+    opportunities = detector.detect_value_bets(snapshots)
     
     result = [opp.to_dict() for opp in opportunities]
     
-    # Filtrar por probabilidad mínima
     min_prob = config.get("thresholds", {}).get("min_value_probability", 0.65)
     result = [o for o in result if o.get("value_probability", 0) >= min_prob]
     
     logger.info(f"✅ Value Betting: {len(result)} oportunidades encontradas")
     
     return result
+
 
 def run_dutching(snapshots: List[Snapshot]) -> List[Dict]:
     """
@@ -102,29 +100,27 @@ def run_dutching(snapshots: List[Snapshot]) -> List[Dict]:
         snapshots: Lista de Snapshots inmutables
     
     Returns:
-        Lista de oportunidades de Dutching (diccionarios)
+        Lista de oportunidades de Dutching (dict)
     """
     logger.info("📊 Ejecutando calculador de dutching...")
     
-    # Configuración desde config.yaml
     dutching_config = config.get("dutching", {})
     total_stake = dutching_config.get("total_stake", 100.0)
-    min_profit_margin = dutching_config.get("min_profit_margin", 0.0) / 100.0  # Convertir %
+    min_profit_margin = dutching_config.get("min_profit_margin", 0.0) / 100.0
     
     calculator = DutchingCalculator(
         total_stake=total_stake,
         min_profit_margin=min_profit_margin
     )
     
-    # Detectar oportunidades de Dutching
     opportunities = calculator.detect_opportunities(snapshots)
     
-    # Convertir a dict
     result = [opp.to_dict() for opp in opportunities]
     
     logger.info(f"✅ Dutching: {len(result)} oportunidades encontradas")
     
     return result
+
 
 def run_pipeline(
     source: str = "csv",
@@ -136,7 +132,7 @@ def run_pipeline(
     Ejecutar pipeline completo
     
     Args:
-        source: Fuente de datos (csv | web)
+        source: Fuente de datos (csv | web | oddsapi)
         mode: Modo de ejecución (all | arbitrage | value | dutching)
         save: Guardar resultados en BD
         limit: Límite de snapshots a procesar
@@ -147,7 +143,7 @@ def run_pipeline(
     logger.info(f"🚀 Iniciando pipeline con fuente: {source}, modo: {mode}")
     
     # 1. Obtener datos (Snapshots inmutables) - Principio #2
-    provider = ConnectorFactory.create(source, config)  # ✅ CORREGIDO
+    provider = ConnectorFactory.create(source, config)
     snapshots = provider.fetch_snapshots()
     
     if not snapshots:
@@ -182,12 +178,8 @@ def run_pipeline(
     # 3. Guardar en base de datos (Principio #3)
     if save and all_opportunities:
         repo = Repository()
-        events = [s.to_dict() for s in snapshots]
-        snapshot_id = repo.save_snapshot({
-            "events": events,
-            "source": source,
-            "timestamp": datetime.now().isoformat()
-        })
+        # Guardamos un snapshot representativo (el primero real)
+        snapshot_id = repo.save_snapshot(snapshots[0])
         repo.save_opportunities(all_opportunities, snapshot_id)
         logger.info(f"💾 Guardados {len(all_opportunities)} oportunidades en BD")
         results["snapshot_id"] = snapshot_id
@@ -227,13 +219,19 @@ def print_summary(results: Dict[str, Any]):
         print("-"*60)
         for i, opp in enumerate(opportunities[:5], 1):
             strategy = opp.get("strategy", "N/A")
-            event = opp.get("event", "Desconocido")
+            event = opp.get("event", opp.get("event_id", "Desconocido"))
             profit = opp.get("profit_percent", 0)
             print(f"{i}. [{strategy.upper()}] {event}")
             print(f"   💰 Beneficio: {profit:.2f}%")
+            if "odds" in opp:
+                for bkm, sel_odds in opp["odds"].items():
+                    print(f"   📌 {bkm}: {sel_odds}")
             print("-"*40)
     
     print("="*60)
+    print("\n💡 Para ver todas las oportunidades en el navegador:")
+    print("   python main.py --serve")
+    print("   Luego abre http://localhost:5000\n")
 
 
 def show_stats():
@@ -298,7 +296,6 @@ def export_results(
         print("❌ No hay oportunidades para exportar")
         return
     
-    # Crear directorio si no existe
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
     
     if format == "json":
@@ -334,7 +331,6 @@ def generate_report(days: int = 7) -> Dict[str, Any]:
     cutoff_date = datetime.now() - timedelta(days=days)
     opportunities = repo.get_opportunities_since(cutoff_date)
     
-    # Estadísticas por estrategia
     strategies = {}
     total_profit = 0.0
     
@@ -356,12 +352,10 @@ def generate_report(days: int = 7) -> Dict[str, Any]:
         
         total_profit += profit
     
-    # Calcular promedios
     for strategy in strategies.values():
         if strategy["count"] > 0:
             strategy["avg_profit"] = strategy["total_profit"] / strategy["count"]
     
-    # Top eventos
     top_events = sorted(
         opportunities,
         key=lambda x: x.get("profit_percent", 0),
@@ -379,21 +373,18 @@ def generate_report(days: int = 7) -> Dict[str, Any]:
         "by_market": {}
     }
     
-    # Agrupar por deporte
     for opp in opportunities:
         sport = opp.get("sport", "unknown")
         if sport not in report["by_sport"]:
             report["by_sport"][sport] = 0
         report["by_sport"][sport] += 1
     
-    # Agrupar por mercado
     for opp in opportunities:
         market = opp.get("market_type", "unknown")
         if market not in report["by_market"]:
             report["by_market"][market] = 0
         report["by_market"][market] += 1
     
-    # Mostrar reporte
     print("\n" + "="*60)
     print("📋 REPORTE DE OPORTUNIDADES")
     print("="*60)
@@ -504,16 +495,12 @@ Ejemplos:
     
     args = parser.parse_args()
     
-    # Configurar debug
     if args.debug:
         config["logs"]["level"] = "DEBUG"
         logger.setLevel("DEBUG")
         logger.debug("🔍 Modo debug activado")
     
-    # --- Comandos de gestión ---
-    
     if args.serve:
-        # Iniciar servidor web
         logger.info("🌐 Iniciando dashboard web...")
         try:
             from src.web.app import create_app
@@ -545,8 +532,6 @@ Ejemplos:
         generate_report(args.report)
         return
     
-    # --- Ejecución principal ---
-    
     try:
         results = run_pipeline(
             source=args.source,
@@ -558,9 +543,10 @@ Ejemplos:
         if results.get("error"):
             sys.exit(1)
         
-        # Si hay oportunidades y se guardaron, mostrar estadísticas
         if results.get("total_opportunities", 0) > 0 and not args.no_save:
-            print("\n💡 Ejecuta 'python main.py --stats' para ver estadísticas completas")
+            print("💡 Para ver las oportunidades en el navegador:")
+            print("   python main.py --serve")
+            print("   Luego abre http://localhost:5000")
         
     except KeyboardInterrupt:
         logger.info("⏹️ Ejecución interrumpida por el usuario")

@@ -6,7 +6,7 @@ Versión: 0.3.3 (COMPLETA)
 import json
 import logging
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .database import get_db, Database
 
@@ -36,6 +36,13 @@ class Repository:
             """)
             if not cursor.fetchone():
                 self._create_tables()
+            # Verificar también la tabla opportunities (nueva)
+            cursor = conn.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='opportunities'
+            """)
+            if not cursor.fetchone():
+                self._create_opportunities_table()
         except Exception as e:
             logger.warning(f"Error al verificar tablas: {e}")
     
@@ -67,6 +74,24 @@ class Repository:
             )
         """)
         logger.info("Tablas base creadas")
+    
+    def _create_opportunities_table(self):
+        """Crea la tabla de oportunidades (arbitraje, value betting, dutching)"""
+        conn = get_db()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS opportunities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_id INTEGER,
+                event_id TEXT NOT NULL,
+                market_type TEXT NOT NULL,
+                profit_percent REAL DEFAULT 0.0,
+                odds_data TEXT,
+                stakes TEXT,
+                source TEXT,
+                timestamp DATETIME NOT NULL
+            )
+        """)
+        logger.info("Tabla opportunities creada")
     
     # === SNAPSHOTS ===
     
@@ -285,6 +310,73 @@ class Repository:
         cursor = conn.execute("SELECT COUNT(*) as count FROM snapshots")
         row = cursor.fetchone()
         return row['count'] if row else 0
+    
+    # === OPORTUNIDADES (Arbitraje, Value Betting, Dutching) ===
+    
+    def save_opportunities(self, opportunities: List[Any], snapshot_id: int) -> int:
+        """
+        Guarda una lista de oportunidades (objetos Opportunity o dicts).
+        Retorna la cantidad de oportunidades guardadas.
+        """
+        if not opportunities:
+            return 0
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            count = 0
+            for opp in opportunities:
+                if isinstance(opp, dict):
+                    event_id = opp.get("event_id", "")
+                    market_type = opp.get("market_type", "")
+                    profit = opp.get("profit_percent", 0.0)
+                    odds_json = json.dumps(opp.get("odds", {}))
+                    stakes_json = json.dumps(opp.get("stakes", {}))
+                    source = opp.get("source", "")
+                    timestamp_str = opp.get("timestamp", datetime.now().isoformat())
+                else:
+                    event_id = opp.event_id
+                    market_type = opp.market_type
+                    profit = opp.profit_percent
+                    odds_json = json.dumps(opp.odds)
+                    stakes_json = json.dumps(opp.stakes)
+                    source = opp.source
+                    timestamp_str = opp.timestamp.isoformat() if hasattr(opp.timestamp, 'isoformat') else str(opp.timestamp)
+                
+                cursor.execute('''
+                    INSERT INTO opportunities 
+                    (snapshot_id, event_id, market_type, profit_percent, odds_data, stakes, source, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    snapshot_id, event_id, market_type, profit,
+                    odds_json, stakes_json, source, timestamp_str
+                ))
+                count += 1
+            conn.commit()
+            logger.info(f"Guardadas {count} oportunidades en BD")
+            return count
+        except Exception as e:
+            logger.error(f"Error guardando oportunidades: {e}")
+            conn.rollback()
+            raise
+    
+    def get_opportunities_since(self, cutoff_date: datetime) -> List[Dict[str, Any]]:
+        """
+        Obtiene oportunidades desde una fecha (para exportación/estadísticas)
+        
+        Args:
+            cutoff_date: Fecha de corte
+        
+        Returns:
+            Lista de diccionarios con oportunidades
+        """
+        conn = get_db()
+        cursor = conn.execute("""
+            SELECT * FROM opportunities
+            WHERE timestamp >= ?
+            ORDER BY timestamp DESC
+        """, (cutoff_date.isoformat(),))
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
     
     # === DECISIONES ===
     

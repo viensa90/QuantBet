@@ -175,21 +175,27 @@ def run_pipeline(
         all_opportunities.extend(opps)
         results["dutching"] = len(opps)
     
-    # 3. Guardar en base de datos (Principio #3)
-    if save and all_opportunities:
-        repo = Repository()
-        # Guardamos un snapshot representativo (el primero real)
-        snapshot_id = repo.save_snapshot(snapshots[0])
-        repo.save_opportunities(all_opportunities, snapshot_id)
-        logger.info(f"💾 Guardados {len(all_opportunities)} oportunidades en BD")
-        results["snapshot_id"] = snapshot_id
-    
     results["total_opportunities"] = len(all_opportunities)
     results["events_processed"] = len(snapshots)
     results["opportunities"] = all_opportunities
     
-    # 4. Mostrar resumen
+    # 4. Mostrar resumen ANTES de guardar, para que siempre se vea
     print_summary(results)
+    
+    # 3. Guardar en base de datos (Principio #3)
+    if save and all_opportunities:
+        try:
+            repo = Repository()
+            # Guardamos un snapshot representativo (el primero)
+            snapshot_id = repo.save_snapshot(snapshots[0])
+            repo.save_opportunities(all_opportunities, snapshot_id)
+            logger.info(f"💾 Guardados {len(all_opportunities)} oportunidades en BD")
+            results["snapshot_id"] = snapshot_id
+        except Exception as e:
+            logger.error(
+                "Error al guardar en BD: %s. Si la estructura es antigua, borra quantbet.db.",
+                e
+            )
     
     return results
 

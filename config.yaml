@@ -24,7 +24,7 @@ markets:
 
 # --- Umbrales ---
 thresholds:
-  min_profit_percent: 0.1
+  min_profit_percent: 1.5
   max_arbitrage_risk: 5.0
   min_value_probability: 0.65
   min_dutching_events: 2
@@ -59,8 +59,8 @@ web_provider:
 # --- NUEVO: Conector The Odds API ---
 odds_api:
   api_key: "87940a0e14d31637dc751fd8e47b38eb"   # <-- REEMPLAZAR con tu clave
-  sports: ["soccer", "tennis", "basketball"]
-  bookmakers: ["pinnacle", "bovada", "onexbet", "williamhill", "unibet", "betway"]
+  sports: ["soccer", "tennis", "basketball"]    # o solo "soccer" para ahorrar
+  bookmakers: ["pinnacle", "bovada", "onexbet"] # los 3 que mas rindieron
   regions: "eu"
   markets: "h2h,totals"
   base_url: "https://api.the-odds-api.com/v4"

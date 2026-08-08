@@ -1,5 +1,5 @@
 arbitrage:
-  min_profit_percent: 1.0   # umbral mínimo de ganancia
+  min_profit_percent: 1.5   # umbral mínimo de ganancia
 
 odds_api:
   key: ""                   # se cargará desde .env

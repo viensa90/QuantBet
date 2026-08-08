@@ -1,27 +1,27 @@
 import argparse
 import sys
 from src.config_loader import ConfigLoader
-from src.logger import setup_logging
+from src.logger import get_logger
 from src.connectors.factory import ProviderFactory
 from src.core.arbitrage import ArbitrageEngine
 from src.storage.database import Database
 from src.storage.repository import Repository
 from src.notifications.telegram_notifier import TelegramNotifier
-import logging
+import logging as _logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def run_pipeline(source='oddsapi', save=True, simple=False):
     config = ConfigLoader()
-    # Configurar logging (si simple, solo WARNING en consola)
-    log_level = logging.WARNING if simple else logging.INFO
-    setup_logging(level=log_level)
+    # Configurar nivel de logs según modo simple
+    log_level = _logging.WARNING if simple else _logging.INFO
+    _logging.getLogger().setLevel(log_level)
 
     engine = ArbitrageEngine()
     db = Database()
     repo = Repository(db)
 
-    provider = ProviderFactory.create(source)
+    provider = ProviderFactory.create_provider(source)
     snapshots = provider.get_events()
 
     all_opportunities = []
@@ -69,7 +69,6 @@ def print_summary(opportunities, simple):
                 print(f"   {outcome['outcome']}: {outcome['bookmaker']} @ {outcome['odds']} (Stake: {outcome['stake']:.2f}€)")
             print(f"   Inversión total: {opp.details['total_investment']:.2f}€ → Retorno: {opp.details['guaranteed_return']:.2f}€ (+{opp.profit_percent:.2f}%)\n")
         else:
-            # Versión detallada con JSON (ya no se usa mucho pero se mantiene)
             import json
             print(json.dumps(opp.__dict__, indent=2))
 

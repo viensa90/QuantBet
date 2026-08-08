@@ -3,8 +3,15 @@ arbitrage:
 
 odds_api:
   key: ""                   # se cargará desde .env
+  sports: 
+    - soccer_spain_la_liga
+    - soccer_epl            # Premier League corregida
+  # Si quieres añadir más cuando tengas créditos:
+  # - tennis_atp
+  # - basketball_nba
+  # - soccer_uefa_champs_league
+  markets: "h2h,totals"           # reducimos a mercados clave para ahorrar datos
   regions: eu
-  markets: h2h,spreads,totals  # mercados a solicitar
 
 notifications:
   telegram:

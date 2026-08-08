@@ -1,16 +1,7 @@
 """
-Módulo de almacenamiento para QuantBet
-Versión: 0.3.3 (COMPLETA)
+Módulo de almacenamiento de QuantBet.
 """
-
-from .database import Database, DatabaseManager, get_db
+from .database import Database, get_db
 from .repository import Repository
-from .migrations import MigrationManager
 
-__all__ = [
-    'Database',
-    'DatabaseManager',  # Alias para compatibilidad
-    'get_db',           # Función de conveniencia
-    'Repository',
-    'MigrationManager'
-]
+__all__ = ['Database', 'get_db', 'Repository']

@@ -1,6 +1,5 @@
 from itertools import product
-from typing import List, Dict, Optional, Any
-from src.domain.entities import Snapshot
+from typing import List, Any
 
 class ArbitrageOpportunity:
     def __init__(self, event_name, sport, market, details, profit, profit_percent):
@@ -12,17 +11,20 @@ class ArbitrageOpportunity:
         self.profit_percent = profit_percent
 
 class ArbitrageEngine:
-    def find_opportunities(self, snapshot: Snapshot) -> List[ArbitrageOpportunity]:
+    def find_opportunities(self, event: Any) -> List[ArbitrageOpportunity]:
         """
-        Encuentra oportunidades de arbitraje para cualquier mercado de 2 o más opciones.
-        Devuelve una lista de ArbitrageOpportunity (normalmente una por snapshot).
+        Encuentra oportunidades de arbitraje en un AggregatedEvent (duck typing).
+        event debe tener: event_name, sport, market, outcomes (lista de objetos con bookmaker, name, price).
         """
-        outcomes_map = self._group_by_outcome(snapshot.outcomes)
+        # Agrupar outcomes por nombre (ej. "Home", "Away", "Draw")
+        outcomes_map = {}
+        for oc in event.outcomes:
+            outcomes_map.setdefault(oc.name, []).append((oc.bookmaker, oc.price))
+
         if len(outcomes_map) < 2:
             return []  # mercado inválido
 
         outcome_names = list(outcomes_map.keys())
-        # Cada outcome tiene una lista de (bookmaker, odds)
         outcome_bookmakers = [outcomes_map[name] for name in outcome_names]
 
         best_profit = -float('inf')
@@ -45,7 +47,6 @@ class ArbitrageEngine:
                 # Detalles de la combinación
                 combo_details = {
                     'outcomes': [],
-                    'stakes': [],
                     'total_investment': round(sum(stakes), 2),
                     'guaranteed_return': round(total_investment / inv_sum, 2)
                 }
@@ -56,7 +57,6 @@ class ArbitrageEngine:
                         'odds': odd,
                         'stake': stake
                     })
-                    combo_details['stakes'].append(stake)
 
                 if profit_percent > best_profit:
                     best_profit = profit_percent
@@ -66,23 +66,11 @@ class ArbitrageEngine:
             return []
 
         opp = ArbitrageOpportunity(
-            event_name=snapshot.event_name,
-            sport=snapshot.sport,
-            market=snapshot.market,
+            event_name=event.event_name,
+            sport=event.sport,
+            market=event.market,
             details=best_combination,
             profit=round(best_combination['guaranteed_return'] - best_combination['total_investment'], 2),
             profit_percent=round(best_profit, 2)
         )
         return [opp]
-
-    def _group_by_outcome(self, outcomes):
-        """
-        Agrupa los objetos Odds por nombre de outcome.
-        Retorna dict: { 'Home': [('Pinnacle', 2.1), ('1xBet', 2.05), ...], ... }
-        """
-        grouped = {}
-        for odds in outcomes:
-            if odds.price is None or odds.price <= 0:
-                continue
-            grouped.setdefault(odds.name, []).append((odds.bookmaker, odds.price))
-        return grouped

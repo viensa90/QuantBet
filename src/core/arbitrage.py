@@ -1,97 +1,88 @@
-"""
-Motor de arbitraje para QuantBet.
-Detecta oportunidades de arbitraje comparando cuotas entre bookmakers.
-"""
-import logging
-from typing import List, Dict, Optional, Tuple
-from itertools import combinations
+from itertools import product
+from typing import List, Dict, Optional, Any
+from src.domain.entities import Snapshot
 
-from src.domain.entities import Snapshot, Opportunity
-from datetime import datetime, timezone
-
-logger = logging.getLogger(__name__)
-
-# Mapeo de selecciones opuestas por tipo de mercado
-OPPOSITE_MAP = {
-    "1X2": {"home": "away", "away": "home", "draw": "draw"},
-    "Tennis Winner": {"home": "away", "away": "home"},
-    "Basketball Moneyline": {"home": "away", "away": "home"},
-}
-
-# Mercados que funcionan con lógica over/under (prefijo "over_" / "under_")
-OVER_UNDER_MARKETS = {
-    "Over/Under", "Tennis Total Games", "Basketball Total Points",
-    "Asian Handicap", "Tennis Set Handicap", "Basketball Spread"
-}
-
+class ArbitrageOpportunity:
+    def __init__(self, event_name, sport, market, details, profit, profit_percent):
+        self.event_name = event_name
+        self.sport = sport
+        self.market = market
+        self.details = details
+        self.profit = profit
+        self.profit_percent = profit_percent
 
 class ArbitrageEngine:
-    """Motor principal de detección de arbitraje."""
+    def find_opportunities(self, snapshot: Snapshot) -> List[ArbitrageOpportunity]:
+        """
+        Encuentra oportunidades de arbitraje para cualquier mercado de 2 o más opciones.
+        Devuelve una lista de ArbitrageOpportunity (normalmente una por snapshot).
+        """
+        outcomes_map = self._group_by_outcome(snapshot.outcomes)
+        if len(outcomes_map) < 2:
+            return []  # mercado inválido
 
-    def __init__(self, min_profit_percent: float = 0.0):
-        self.min_profit = min_profit_percent / 100.0
+        outcome_names = list(outcomes_map.keys())
+        # Cada outcome tiene una lista de (bookmaker, odds)
+        outcome_bookmakers = [outcomes_map[name] for name in outcome_names]
 
-    def detect_opportunities(self, snapshots: List[Snapshot]) -> List[Opportunity]:
-        groups: Dict[Tuple[str, str], List[Snapshot]] = {}
-        for snap in snapshots:
-            key = (snap.event_id, snap.market_type)
-            groups.setdefault(key, []).append(snap)
+        best_profit = -float('inf')
+        best_combination = None
+        total_investment = 100.0  # base para calcular stakes proporcionales
 
-        all_opps = []
-        for (event_id, market_type), group in groups.items():
-            if len(group) < 2:
+        # Producto cartesiano de todos los bookmakers para cada outcome
+        for combo in product(*outcome_bookmakers):
+            odds_list = [item[1] for item in combo]
+            if any(o <= 1.0 for o in odds_list):
                 continue
-            opps = self._find_arbitrage_opportunities(group, market_type)
-            all_opps.extend(opps)
+            inv_sum = sum(1/o for o in odds_list)
+            if inv_sum < 1.0:
+                profit_percent = (1 - inv_sum) * 100
+                # Calcular stakes individuales para una inversión total fija
+                stakes = []
+                for odd in odds_list:
+                    stake = (total_investment * (1/odd)) / inv_sum
+                    stakes.append(round(stake, 2))
+                # Detalles de la combinación
+                combo_details = {
+                    'outcomes': [],
+                    'stakes': [],
+                    'total_investment': round(sum(stakes), 2),
+                    'guaranteed_return': round(total_investment / inv_sum, 2)
+                }
+                for (name, (bookmaker, odd)), stake in zip(zip(outcome_names, combo), stakes):
+                    combo_details['outcomes'].append({
+                        'outcome': name,
+                        'bookmaker': bookmaker,
+                        'odds': odd,
+                        'stake': stake
+                    })
+                    combo_details['stakes'].append(stake)
 
-        logger.info("Total oportunidades detectadas: %d", len(all_opps))
-        return all_opps
+                if profit_percent > best_profit:
+                    best_profit = profit_percent
+                    best_combination = combo_details
 
-    def _find_arbitrage_opportunities(
-        self, snapshots: List[Snapshot], market_type: str
-    ) -> List[Opportunity]:
-        opportunities = []
-        for snap1, snap2 in combinations(snapshots, 2):
-            if snap1.bookmaker == snap2.bookmaker:
+        if best_combination is None:
+            return []
+
+        opp = ArbitrageOpportunity(
+            event_name=snapshot.event_name,
+            sport=snapshot.sport,
+            market=snapshot.market,
+            details=best_combination,
+            profit=round(best_combination['guaranteed_return'] - best_combination['total_investment'], 2),
+            profit_percent=round(best_profit, 2)
+        )
+        return [opp]
+
+    def _group_by_outcome(self, outcomes):
+        """
+        Agrupa los objetos Odds por nombre de outcome.
+        Retorna dict: { 'Home': [('Pinnacle', 2.1), ('1xBet', 2.05), ...], ... }
+        """
+        grouped = {}
+        for odds in outcomes:
+            if odds.price is None or odds.price <= 0:
                 continue
-            odds1 = snap1.odds_data
-            odds2 = snap2.odds_data
-
-            for sel in odds1:
-                opposite = self._get_opposite_selection(sel, market_type)
-                if not opposite or opposite not in odds2:
-                    continue
-                margin = 1.0 / odds1[sel] + 1.0 / odds2[opposite]
-                if margin < 1.0:
-                    profit_percent = (1.0 - margin) * 100
-                    if profit_percent >= self.min_profit * 100:
-                        stakes = self._calculate_stakes(odds1[sel], odds2[opposite])
-                        opp = Opportunity(
-                            event_id=snap1.event_id,
-                            market_type=market_type,
-                            profit_percent=round(profit_percent, 2),
-                            odds={
-                                snap1.bookmaker: {sel: odds1[sel]},
-                                snap2.bookmaker: {opposite: odds2[opposite]}
-                            },
-                            stakes=stakes,
-                            source=f"{snap1.bookmaker} vs {snap2.bookmaker}",
-                            timestamp=datetime.now(timezone.utc)
-                        )
-                        opportunities.append(opp)
-        return opportunities
-
-    def _get_opposite_selection(self, selection: str, market_type: str) -> Optional[str]:
-        if market_type in OVER_UNDER_MARKETS:
-            if selection.startswith("over"):
-                return selection.replace("over", "under", 1)
-            elif selection.startswith("under"):
-                return selection.replace("under", "over", 1)
-            return None
-        mapping = OPPOSITE_MAP.get(market_type, {})
-        return mapping.get(selection)
-
-    def _calculate_stakes(self, odd1: float, odd2: float, total: float = 100.0) -> Dict[str, float]:
-        stake1 = total / (1 + odd1 / odd2)
-        stake2 = total - stake1
-        return {"stake_selection1": round(stake1, 2), "stake_selection2": round(stake2, 2)}
+            grouped.setdefault(odds.name, []).append((odds.bookmaker, odds.price))
+        return grouped

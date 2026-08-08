@@ -1,120 +1,12 @@
-# QuantBet - Configuración Centralizada
-# Versión: 0.3.3
+arbitrage:
+  min_profit_percent: 1.0   # umbral mínimo de ganancia
 
-# --- Estrategias ---
-strategies:
-  arbitrage: true
-  value_betting: true
-  dutching: true
-
-# --- Mercados ---
-markets:
-  enabled:
-    - "1X2"
-    - "Over/Under"
-    - "Asian Handicap"
-    - "Double Chance"
-    - "Tennis Winner"
-    - "Set Handicap"
-    - "Total Games"
-    - "Basketball Moneyline"
-    - "Point Spread"
-    - "Total Points"
-    - "Quarter Winner"
-
-# --- Umbrales ---
-thresholds:
-  min_profit_percent: 1.5
-  max_arbitrage_risk: 5.0
-  min_value_probability: 0.65
-  min_dutching_events: 2
-  max_dutching_events: 5
-
-# --- Modelos de Probabilidad ---
-probability_model:
-  type: "historical"  # historical | elo | poisson
-  elo_k_factor: 32
-  historical_window: 10
-  poisson_avg_goals: 2.5
-
-# --- Gestión de Banca ---
-bankroll:
-  initial: 1000.0
-  currency: "USD"
-  max_stake_percentage: 2.0
-
-# --- Conectores ---
-csv_provider:
-  enabled: true
-  events_file: "data/sample_events.csv"
-  tennis_file: "data/tennis_events.csv"
-  basketball_file: "data/basketball_events.csv"
-
-web_provider:
-  enabled: false
-  url: "https://example.com/odds"
-  selector: ".odds-table"
-  headless: true
-
-# --- NUEVO: Conector The Odds API ---
 odds_api:
-  api_key: "87940a0e14d31637dc751fd8e47b38eb"   # <-- REEMPLAZAR con tu clave
-  sports: ["soccer", "tennis", "basketball"]    # o solo "soccer" para ahorrar
-  bookmakers: ["pinnacle", "bovada", "onexbet"] # los 3 que mas rindieron
-  regions: "eu"
-  markets: "h2h,totals"
-  base_url: "https://api.the-odds-api.com/v4"
+  key: ""                   # se cargará desde .env
+  regions: eu
+  markets: h2h,spreads,totals  # mercados a solicitar
 
-# --- Base de Datos ---
-database:
-  path: "quantbet.db"
-  wal_mode: true
-  cache_size: 10000
-  sync_mode: "NORMAL"
-
-# --- Notificaciones ---
 notifications:
-  email:
-    enabled: false
-    smtp_server: "smtp.gmail.com"
-    smtp_port: 587
-    sender: "quantbet@example.com"
-    recipients:
-      - "user@example.com"
-  
   telegram:
-    enabled: false
-    bot_token: "TU_BOT_TOKEN"
-    chat_id: "TU_CHAT_ID"
-
-# --- Dashboard Web ---
-web:
-  host: "0.0.0.0"
-  port: 5000
-  debug: false
-  swagger_enabled: true
-  refresh_interval: 5000  # ms para actualización automática
-
-# --- Logs Avanzados ---
-logs:
-  level: "INFO"  # DEBUG | INFO | WARNING | ERROR | CRITICAL
-  format: "json"  # json | text
-  elasticsearch:
-    enabled: false
-    hosts: ["http://localhost:9200"]
-    index: "quantbet-logs"
-    username: ""
-    password: ""
-  file:
-    enabled: true
-    path: "logs/quantbet.log"
-    max_size_mb: 100
-    backup_count: 5
-  console:
-    enabled: true
-    color: true
-
-# --- Dutching ---
-dutching:
-  total_stake: 100.0           # Stake total a repartir
-  min_profit_margin: 0.0       # Margen mínimo en % (0 = cualquier oportunidad)
+    bot_token: ""           # desde .env
+    chat_id: ""             # desde .env

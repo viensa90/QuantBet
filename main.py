@@ -2,7 +2,7 @@ import argparse
 import sys
 from src.config_loader import ConfigLoader
 from src.logger import get_logger
-from src.connectors.factory import ProviderFactory
+from src.connectors.factory import ConnectorFactory          # ← clase real
 from src.core.arbitrage import ArbitrageEngine
 from src.storage.database import Database
 from src.storage.repository import Repository
@@ -21,7 +21,9 @@ def run_pipeline(source='oddsapi', save=True, simple=False):
     db = Database()
     repo = Repository(db)
 
-    provider = ProviderFactory.create_provider(source)
+    # Crear el proveedor pasando la configuración completa
+    provider = ConnectorFactory.create(source, config._config)
+
     snapshots = provider.get_events()
 
     all_opportunities = []

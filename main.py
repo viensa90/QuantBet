@@ -1,116 +1,147 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-QuantBet - Pipeline principal.
-Modo --simple: muestra en consola las oportunidades encontradas.
+QuantBet - Sistema de Arbitraje Deportivo Automatizado
+Versión: 0.5.0
 """
-import os
-import sys
+
 import argparse
-from dotenv import load_dotenv
+import sys
+from datetime import datetime
 
-# Cargar variables de entorno
-load_dotenv()
-
-from src.config_loader import load_config
-from src.logger import logger
-from src.connectors.odds_api_provider import OddsAPIProvider
+from src.config_loader import config, get_api_key   # <-- CORREGIDO: importamos config directamente
+from src.logger import setup_logger, log
+from src.connectors.factory import get_provider
 from src.core.arbitrage import ArbitrageEngine
+from src.storage.database import init_db
 from src.storage.repository import OpportunityRepository
-from src.notifications.telegram_notifier import TelegramNotifier
+from src.notifications.telegram_notifier import maybe_notify
+
+
+def banner():
+    print("""
+ ██████╗ ██╗   ██╗ █████╗ ███╗   ██╗████████╗██████╗ ███████╗████████╗
+██╔═══██╗██║   ██║██╔══██╗████╗  ██║╚══██╔══╝██╔══██╗██╔════╝╚══██╔══╝
+██║   ██║██║   ██║███████║██╔██╗ ██║   ██║   ██████╔╝█████╗     ██║
+██║▄▄ ██║██║   ██║██╔══██║██║╚██╗██║   ██║   ██╔══██╗██╔══╝     ██║
+╚██████╔╝╚██████╔╝██║  ██║██║ ╚████║   ██║   ██████╔╝███████╗   ██║
+ ╚══▀▀═╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═════╝ ╚══════╝   ╚═╝
+    """)
+    print("QuantBet - Arbitraje Deportivo Automatizado")
+    print("=" * 60)
+    print(f"Inicio: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print()
+
 
 def main():
-    parser = argparse.ArgumentParser(description="QuantBet - Pipeline de arbitraje")
-    parser.add_argument("--simple", action="store_true", help="Salida simplificada en consola")
+    parser = argparse.ArgumentParser(description="QuantBet - Arbitraje Deportivo Automatizado")
+    parser.add_argument("--simple", action="store_true", help="Salida simplificada (sin arte ASCII)")
+    parser.add_argument("--no-save", action="store_true", help="No persistir en BD")
+    parser.add_argument("--sports", type=str, help="Filtrar deportes (separados por coma)")
+    parser.add_argument("--markets", type=str, help="Filtrar mercados (separados por coma)")
+    parser.add_argument("--min-profit", type=float, help="Umbral de profit mínimo (%)")
     args = parser.parse_args()
 
-    # 1. Cargar configuración
-    config = load_config()
-    sports = config.get("sports", [])
-    min_profit = config.get("arbitrage", {}).get("min_profit_percent", 1.5)
-    bookmakers = config.get("odds_api", {}).get("bookmakers", "")
-    markets = config.get("markets", "h2h,totals")
-    regions = config.get("regions", "eu")
+    # Configurar logger
+    setup_logger()
 
-    api_key = os.getenv("ODDS_API_KEY")
-    if not api_key:
-        logger.error("Falta ODDS_API_KEY en .env")
-        sys.exit(1)
-
-    # 2. Conector (con filtro de bookmakers)
-    provider = OddsAPIProvider(
-        api_key=api_key,
-        bookmakers=bookmakers,
-        regions=regions,
-        markets=markets
-    )
-
-    # 3. Motor de arbitraje
-    engine = ArbitrageEngine(min_profit_percent=min_profit)
-
-    # 4. Repositorio (persistencia)
-    repo = OpportunityRepository()
-
-    # 5. Notificador Telegram (si está configurado)
-    telegram_enabled = config.get("notifications", {}).get("telegram", {}).get("enabled", False)
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    notifier = None
-    if telegram_enabled and bot_token and chat_id:
-        notifier = TelegramNotifier(bot_token=bot_token, chat_id=chat_id)
-        logger.info("Notificaciones Telegram activadas")
+    # Banner
+    if not args.simple:
+        banner()
     else:
-        logger.info("Notificaciones Telegram desactivadas o sin configuración")
+        log.info("QuantBet v0.5.0 iniciado en modo simple")
 
-    # 6. Ejecutar pipeline para cada deporte
-    total_opportunities = 0
-    for sport in sports:
-        logger.info("Procesando deporte: %s", sport)
-        events = provider.fetch_events(sport)
-        if not events:
-            logger.warning("No se obtuvieron eventos para %s", sport)
-            continue
+    # Cargar configuración (ya está cargada al importar config, pero permitimos sobrescribir con args)
+    # Usamos una copia para no modificar el original
+    cfg = config.copy() if isinstance(config, dict) else config
 
-        opportunities = engine.find_opportunities(events)
-        if not opportunities:
-            logger.info("No se encontraron oportunidades en %s", sport)
+    # Sobrescribir config con argumentos de línea de comandos
+    if args.sports:
+        cfg['sports'] = [s.strip() for s in args.sports.split(",")]
+    if args.markets:
+        cfg['markets'] = args.markets
+    if args.min_profit:
+        cfg['min_profit_percent'] = args.min_profit
+
+    log.info(f"Deportes: {', '.join(cfg['sports'])}")
+    log.info(f"Mercados: {cfg['markets']}")
+    log.info(f"Profit mínimo: {cfg['min_profit_percent']}%")
+    log.info(f"Bookmakers permitidos: {', '.join(cfg.get('allowed_bookmakers', []))}")
+
+    # Inicializar proveedor de datos
+    provider = get_provider()
+
+    # Inicializar base de datos (WAL activado)
+    init_db()
+
+    # Inicializar repositorio y motor de arbitraje
+    repo = OpportunityRepository()
+    engine = ArbitrageEngine()
+
+    all_opportunities = []
+    total_events = 0
+    total_snapshots = 0
+
+    # Pipeline principal
+    for sport_key in cfg['sports']:
+        log.info(f"Procesando {sport_key}...")
+        outcomes = provider.fetch(sport_key, markets=cfg['markets'])
+        
+        if not outcomes:
+            log.warning(f"Sin datos para {sport_key}")
             continue
+        
+        total_events += len(set(o.event_name for o in outcomes))
+        total_snapshots += len(outcomes)
+        
+        # Buscar oportunidades de arbitraje
+        opportunities = engine.find_opportunities(
+            outcomes,
+            min_profit=cfg['min_profit_percent'] / 100
+        )
+        
+        if opportunities:
+            log.info(f"  -> {len(opportunities)} oportunidades en {sport_key}")
+            all_opportunities.extend(opportunities)
+
+    # Mostrar resultados
+    print()
+    log.info(f"Resumen: {total_events} eventos, {total_snapshots} snapshots, {len(all_opportunities)} oportunidades")
+    print()
+
+    if all_opportunities:
+        print("=" * 60)
+        print(f"   🚀 OPORTUNIDADES DE ARBITRAJE ENCONTRADAS: {len(all_opportunities)}")
+        print("=" * 60)
+        print()
+        
+        for i, opp in enumerate(all_opportunities, 1):
+            print(f"--- Oportunidad #{i} ---")
+            if args.simple:
+                print(opp.summary())
+            else:
+                print(opp.detail())
+            print()
 
         # Guardar en BD
-        for opp in opportunities:
-            repo.save_opportunity(opp)
-            total_opportunities += 1
-            if args.simple:
-                print(f"✅ {opp.event_name} | {opp.market} | {opp.combination} | "
-                      f"Profit: {opp.profit_percent:.2f}% | Apuesta: {opp.bet_info}")
+        if not args.no_save:
+            saved = repo.save_batch(all_opportunities)
+            log.info(f"{saved} oportunidades guardadas en BD.")
 
-        logger.info("Oportunidades en %s: %d", sport, len(opportunities))
+        # Notificar por Telegram
+        maybe_notify(all_opportunities)
+    else:
+        print("😔 No se encontraron oportunidades de arbitraje.")
+        print("   Posibles causas:")
+        print("   - Mercados muy eficientes en este momento")
+        print("   - Umbral de profit demasiado alto")
+        print("   - Bookmakers limitados en el plan gratuito")
+        print()
+        log.info("Sin oportunidades. Revisa los filtros o espera a mejores cuotas.")
 
-    # 7. Resumen y notificación
-    logger.info("Pipeline finalizado. Total oportunidades: %d", total_opportunities)
+    print(f"Fin: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    log.info("Pipeline finalizado.")
 
-    if notifier and total_opportunities > 0:
-        # Construir mensaje resumen
-        lines = []
-        lines.append("📊 *QuantBet - Nuevas oportunidades detectadas*")
-        lines.append(f"Total: {total_opportunities}")
-        lines.append("")
-        # Recuperar las últimas 5 para detalle
-        last_opps = repo.get_recent(limit=5)
-        for opp in last_opps:
-            lines.append(f"• *{opp.event_name}*")
-            lines.append(f"  Mercado: {opp.market}")
-            lines.append(f"  Combinación: {opp.combination}")
-            lines.append(f"  Profit: {opp.profit_percent:.2f}%")
-            lines.append(f"  Apuesta: {opp.bet_info}")
-            lines.append("")
-        if total_opportunities > 5:
-            lines.append(f"... y {total_opportunities - 5} más. Revisa el dashboard.")
-
-        message = "\n".join(lines)
-        notifier.send_message(message)
-
-    elif notifier and total_opportunities == 0:
-        notifier.send_message("🔍 *QuantBet* - No se encontraron oportunidades en esta ejecución.")
 
 if __name__ == "__main__":
     main()

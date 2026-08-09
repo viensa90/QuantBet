@@ -14,8 +14,9 @@ logger = get_logger(__name__)
 class Outcome:
     """Una cuota individual para un resultado específico de un bookmaker."""
     bookmaker: str
-    name: str          # Ej: "Home", "Over 2.5", "Draw"
+    name: str          # Ej: "Over", "Under", "Home", "Away", "Draw"
     price: float
+    point: Optional[float] = None   # Línea exacta en mercados de hándicap/totales
 
 
 @dataclass
@@ -26,8 +27,8 @@ class AggregatedEvent:
     """
     event_name: str
     sport: str
-    market: str                     # Nombre normalizado del mercado (ej. "h2h", "totals")
-    outcomes: List[Outcome]         # Lista de cuotas de todos los bookmakers para este mercado
+    market: str                     # Nombre del mercado, ej: "h2h", "totals"
+    outcomes: List[Outcome]         # Lista de cuotas para este mercado
     timestamp: Optional[str] = None
 
 
@@ -39,10 +40,10 @@ class OddsAPIProvider:
         self.base_url = config.get("base_url", "https://api.the-odds-api.com/v4")
         self.sports = config.get("sports", [
             "soccer_spain_la_liga",
-            "soccer_epl"                         # ← clave corregida
+            "soccer_epl"
         ])
         self.regions = config.get("regions", "eu")
-        self.markets = config.get("markets", "h2h,totals,spreads")
+        self.markets = config.get("markets", "h2h,totals")
         self.bookmakers = config.get("bookmakers", None)
 
     def get_events(self) -> List[AggregatedEvent]:
@@ -50,7 +51,7 @@ class OddsAPIProvider:
         for sport in self.sports:
             try:
                 sport_events = self._fetch_sport(sport)
-                aggregated_events.extend(sport_events)   # ← usar extend
+                aggregated_events.extend(sport_events)
             except Exception as e:
                 logger.error("Error obteniendo eventos para %s: %s", sport, e)
         return aggregated_events
@@ -76,36 +77,48 @@ class OddsAPIProvider:
         for game in data:
             parsed = self._parse_game(sport, game)
             if parsed:
-                events.extend(parsed)   # ← parsed es lista de AggregatedEvent
+                events.extend(parsed)
         return events
 
     def _parse_game(self, sport: str, game: dict) -> Optional[List[AggregatedEvent]]:
         try:
             event_name = f"{game['home_team']} vs {game['away_team']}"
             bookmakers_data = game.get("bookmakers", [])
-            outcomes_by_market = {}
+            # Diccionario: (market_key, point) -> lista de Outcome
+            # Para mercados sin punto (h2h), point será None
+            grouped = {}
 
             for bk in bookmakers_data:
                 bookmaker_name = bk["title"]
                 for market in bk.get("markets", []):
                     market_key = market["key"]
-                    outcomes_by_market.setdefault(market_key, [])
+                    # Ignorar mercados lay (contienen _lay)
+                    if "_lay" in market_key:
+                        continue
                     for oc in market.get("outcomes", []):
-                        outcomes_by_market[market_key].append(
+                        point = oc.get("point")
+                        key = (market_key, point)
+                        grouped.setdefault(key, [])
+                        grouped[key].append(
                             Outcome(
                                 bookmaker=bookmaker_name,
                                 name=oc["name"],
-                                price=oc["price"]
+                                price=oc["price"],
+                                point=point
                             )
                         )
 
             aggregated = []
-            for market_key, outcomes_list in outcomes_by_market.items():
+            for (market_key, point), outcomes_list in grouped.items():
+                # Construir nombre de mercado descriptivo (incluye punto si existe)
+                market_name = market_key
+                if point is not None:
+                    market_name = f"{market_key} {point}"
                 aggregated.append(
                     AggregatedEvent(
                         event_name=event_name,
                         sport=sport,
-                        market=market_key,
+                        market=market_name,
                         outcomes=outcomes_list,
                         timestamp=game.get("commence_time")
                     )

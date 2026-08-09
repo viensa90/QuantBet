@@ -13,23 +13,25 @@ class ArbitrageOpportunity:
 class ArbitrageEngine:
     def find_opportunities(self, event: Any) -> List[ArbitrageOpportunity]:
         """
-        Encuentra oportunidades de arbitraje en un AggregatedEvent (duck typing).
-        event debe tener: event_name, sport, market, outcomes (lista de objetos con bookmaker, name, price).
+        Encuentra oportunidades de arbitraje en un AggregatedEvent.
+        event debe tener: event_name, sport, market, outcomes (lista de objetos con bookmaker, name, price, point).
         """
-        # Agrupar outcomes por nombre (ej. "Home", "Away", "Draw")
+        # Agrupar outcomes por clave única: (name, point)
+        # Para mercados sin point, point=None
         outcomes_map = {}
         for oc in event.outcomes:
-            outcomes_map.setdefault(oc.name, []).append((oc.bookmaker, oc.price))
+            key = (oc.name, oc.point)   # point puede ser None -> se agrupan todos los None juntos
+            outcomes_map.setdefault(key, []).append((oc.bookmaker, oc.price))
 
         if len(outcomes_map) < 2:
-            return []  # mercado inválido
+            return []
 
-        outcome_names = list(outcomes_map.keys())
-        outcome_bookmakers = [outcomes_map[name] for name in outcome_names]
+        outcome_keys = list(outcomes_map.keys())
+        outcome_bookmakers = [outcomes_map[key] for key in outcome_keys]
 
         best_profit = -float('inf')
         best_combination = None
-        total_investment = 100.0  # base para calcular stakes proporcionales
+        total_investment = 100.0
 
         # Producto cartesiano de todos los bookmakers para cada outcome
         for combo in product(*outcome_bookmakers):
@@ -39,20 +41,21 @@ class ArbitrageEngine:
             inv_sum = sum(1/o for o in odds_list)
             if inv_sum < 1.0:
                 profit_percent = (1 - inv_sum) * 100
-                # Calcular stakes individuales para una inversión total fija
                 stakes = []
                 for odd in odds_list:
                     stake = (total_investment * (1/odd)) / inv_sum
                     stakes.append(round(stake, 2))
-                # Detalles de la combinación
                 combo_details = {
                     'outcomes': [],
                     'total_investment': round(sum(stakes), 2),
                     'guaranteed_return': round(total_investment / inv_sum, 2)
                 }
-                for (name, (bookmaker, odd)), stake in zip(zip(outcome_names, combo), stakes):
+                for (name, point), (bookmaker, odd), stake in zip(outcome_keys, combo, stakes):
+                    label = name
+                    if point is not None:
+                        label = f"{name} {point}"
                     combo_details['outcomes'].append({
-                        'outcome': name,
+                        'outcome': label,
                         'bookmaker': bookmaker,
                         'odds': odd,
                         'stake': stake

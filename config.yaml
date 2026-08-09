@@ -1,22 +1,14 @@
-# QuantBet - Configuración central
-# Los secretos (API keys, tokens) se cargan desde .env
-
-arbitrage:
-  min_profit_percent: 1.5          # Umbral mínimo de rentabilidad (%)
-
-odds_api:
-  # bookmakers se pasa como string separado por comas a The Odds API
-  bookmakers: "Pinnacle,1xBet,BetOnline.ag,Betfair"
-
+# QuantBet Configuration v0.5.0
 sports:
   - soccer_spain_la_liga
   - soccer_epl
-
 markets: "h2h,totals"
-regions: eu
+min_profit_percent: 1.5
+max_stake: 200
 
-notifications:
-  telegram:
-    enabled: true                  # Activar/desactivar notificaciones
-    bot_token: ""                  # Se carga desde .env
-    chat_id: ""                    # Se carga desde .env
+# Bookmakers permitidos (claves exactas de The Odds API)
+allowed_bookmakers:
+  - pinnacle        # Pinnacle
+  - onexbet         # 1xBet
+  - betonlineag     # BetOnline.ag
+  - betfair         # Betfair (Sportsbook) 

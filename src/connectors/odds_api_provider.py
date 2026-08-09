@@ -1,120 +1,98 @@
-"""
-Conector para The Odds API.
-- Filtra por bookmakers (lista blanca).
-- Timeout 10s y reintentos automáticos (3 intentos con backoff).
-- Ignora mercados _lay.
-- Incluye campo 'point' para líneas exactas (totals).
-"""
-import os
+import time
+from typing import List, Dict
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from typing import List, Optional
-from src.connectors.base import BaseProvider, AggregatedEvent, Outcome
-from src.logger import logger
 
-class OddsAPIProvider(BaseProvider):
-    def __init__(self, api_key: str, bookmakers: Optional[str] = None,
-                 regions: str = "eu", markets: str = "h2h,totals"):
-        self.api_key = api_key
-        self.bookmakers = bookmakers  # ej: "Pinnacle,1xBet,BetOnline.ag"
-        self.regions = regions
-        self.markets = markets
-        self.base_url = "https://api.the-odds-api.com/v4"
+from src.connectors.base import OddsProvider
+from src.domain.entities import Outcome
+from src.config_loader import config, get_api_key
+from src.logger import log
 
-    def fetch_events(self, sport: str) -> List[AggregatedEvent]:
-        """Obtiene eventos para un deporte, filtrando por bookmakers."""
-        return self._fetch_sport(sport)
 
-    def _fetch_sport(self, sport: str) -> List[AggregatedEvent]:
-        url = f"{self.base_url}/sports/{sport}/odds"
+class OddsAPIProvider(OddsProvider):
+    BASE_URL = "https://api.the-odds-api.com/v4/sports"
+
+    def __init__(self):
+        self.api_key = get_api_key("ODDS_API_KEY")
+        if not self.api_key:
+            raise ValueError("ODDS_API_KEY no configurada en .env")
+        # Convertir a minúsculas para comparación insensible a mayúsculas/minúsculas
+        self.allowed_bookmakers = {b.lower() for b in config["allowed_bookmakers"]}
+        self.session = requests.Session()
+        self.session.headers.update({"accept": "application/json"})
+
+    def fetch(self, sport_key: str, regions: str = "us,eu,uk", markets: str = "h2h") -> List[Outcome]:
         params = {
             "apiKey": self.api_key,
-            "regions": self.regions,
-            "markets": self.markets,
-            "dateFormat": "iso",
+            "regions": regions,
+            "markets": markets,
             "oddsFormat": "decimal",
         }
-        if self.bookmakers:
-            params["bookmakers"] = self.bookmakers
-
-        logger.info("Consultando Odds API: %s (bookmakers: %s)", url, self.bookmakers)
-
-        # --- Session con reintentos y timeout ---
-        session = requests.Session()
-        retries = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[500, 502, 503, 504],
-            allowed_methods=["GET"]
-        )
-        session.mount('https://', HTTPAdapter(max_retries=retries))
-
+        url = f"{self.BASE_URL}/{sport_key}/odds"
+        outcomes = []
         try:
-            resp = session.get(url, params=params, timeout=10)
-            resp.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            logger.error("Error al consultar Odds API: %s", e)
+            resp = self._request_with_retry(url, params)
+            data = resp.json()
+            for game in data:
+                outcomes.extend(self._parse_game(game, sport_key))
+            log.info(f"Obtenidos {len(outcomes)} outcomes de {sport_key}")
+            return outcomes
+        except Exception as e:
+            log.error(f"Error al obtener cuotas de {sport_key}: {e}")
             return []
 
-        data = resp.json()
-        events = []
-        for game in data:
-            parsed = self._parse_game(sport, game)
-            if parsed:
-                events.extend(parsed)
-        return events
+    def _request_with_retry(self, url, params, retries=3, backoff=2, timeout=10):
+        for attempt in range(retries):
+            try:
+                resp = self.session.get(url, params=params, timeout=timeout)
+                resp.raise_for_status()
+                remaining = resp.headers.get("x-requests-remaining", "?")
+                log.info(f"Créditos restantes The Odds API: {remaining}")
+                return resp
+            except requests.exceptions.RequestException as e:
+                # Log seguro sin exponer la API key
+                if hasattr(e, 'response') and e.response is not None:
+                    log.warning(f"Intento {attempt+1} fallido: HTTP {e.response.status_code}")
+                else:
+                    log.warning(f"Intento {attempt+1} fallido: {type(e).__name__}")
+                if attempt < retries - 1:
+                    time.sleep(backoff * (attempt + 1))
+                else:
+                    raise
 
-    def _parse_game(self, sport: str, game: dict) -> List[AggregatedEvent]:
-        """
-        Parsea un partido y devuelve una lista de AggregatedEvent (uno por mercado).
-        - Ignora mercados que contengan '_lay'.
-        - Cada outcome incluye el campo 'point' (línea exacta para totals).
-        """
-        events = []
-        home = game.get("home_team", "Unknown")
-        away = game.get("away_team", "Unknown")
-        event_name = f"{home} vs {away}"
-        commence_time = game.get("commence_time", "")
+    def _parse_game(self, game: Dict, sport_key: str) -> List[Outcome]:
+        outcomes = []
+        event_name = f"{game.get('home_team')} vs {game.get('away_team')}"
+        bookmakers_data = game.get("bookmakers", [])
 
-        for bookmaker in game.get("bookmakers", []):
-            bk_name = bookmaker.get("key", "unknown")
-            # Si definimos bookmakers en la petición, la API ya filtra,
-            # pero lo dejamos por si acaso.
-            if self.bookmakers and bk_name not in [b.strip() for b in self.bookmakers.split(",")]:
+        for bk in bookmakers_data:
+            bookmaker = bk.get("key")
+            if bookmaker.lower() not in self.allowed_bookmakers:
                 continue
 
-            for market in bookmaker.get("markets", []):
-                market_key = market.get("key", "")
-                # Ignoramos mercados _lay (solo queremos back)
+            markets_list = bk.get("markets", [])
+            for mkt in markets_list:
+                market_key = mkt.get("key")
                 if "_lay" in market_key:
                     continue
 
-                outcomes = []
-                for outcome in market.get("outcomes", []):
-                    name = outcome.get("name", "")
-                    price = outcome.get("price", 0.0)
-                    point = outcome.get("point", None)  # línea exacta para totals
+                point = None
+                if market_key == "totals":
+                    point = mkt.get("point")
+
+                for out in mkt.get("outcomes", []):
+                    name = out.get("name")
+                    price = out.get("price")
+                    point_outcome = out.get("point", None)
+                    final_point = point_outcome if point_outcome is not None else point
+
                     outcomes.append(Outcome(
-                        bookmaker=bk_name,
+                        bookmaker=bookmaker,
+                        sport=sport_key,
+                        event_name=event_name,
+                        market=market_key,
                         name=name,
                         price=price,
-                        point=point,
-                        market=market_key
+                        point=final_point,
+                        timestamp=time.time()
                     ))
-
-                if outcomes:
-                    events.append(AggregatedEvent(
-                        sport=sport,
-                        event_name=event_name,
-                        commence_time=commence_time,
-                        market=market_key,
-                        outcomes=outcomes,
-                        details={
-                            "home": home,
-                            "away": away,
-                            "bookmaker": bk_name,
-                            "point": outcomes[0].point if outcomes else None
-                        }
-                    ))
-        return events
+        return outcomes

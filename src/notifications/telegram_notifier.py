@@ -1,11 +1,10 @@
 import requests
-from src.config_loader import get_api_key
+from src.config_loader import ConfigLoader
 from src.logger import log
 
-# Emojis por casa (para Telegram, ya que no usa ANSI)
 BOOKMAKER_EMOJI = {
-    'pinnacle': '🟠',   # naranja
-    'onexbet': '🔵',    # azul
+    'pinnacle': '🟠',
+    'onexbet': '🔵',
     'betonlineag': '🔴',
     'betfair': '🟡',
 }
@@ -13,7 +12,6 @@ FALLBACK_EMOJI = '⚪'
 
 
 def _format_opportunity(opp) -> str:
-    """Construye el texto de una oportunidad para Telegram."""
     lines = [f"⚽ *{opp.event_name}*"]
     lines.append(f"   Mercado {opp.market} | Profit *{opp.profit_percent:.2f}%*")
     stakes, retorno = opp._calculate_stakes(100.0)
@@ -27,8 +25,9 @@ def _format_opportunity(opp) -> str:
 
 
 def maybe_notify(opportunities):
-    token = get_api_key("TELEGRAM_BOT_TOKEN")
-    chat_id = get_api_key("TELEGRAM_CHAT_ID")
+    cfg = ConfigLoader()
+    token = cfg.telegram_token
+    chat_id = cfg.telegram_chat_id
     if not token or not chat_id:
         log.warning("Telegram no configurado – no se enviarán notificaciones.")
         return
@@ -37,10 +36,9 @@ def maybe_notify(opportunities):
         log.info("Sin oportunidades, no se envía notificación.")
         return
 
-    # Construir mensaje
     header = f"🚀 *QuantBet – {len(opportunities)} oportunidad(es) de arbitraje*"
     parts = [header]
-    for opp in opportunities[:10]:   # máximo 10 para no saturar
+    for opp in opportunities[:10]:
         parts.append(_format_opportunity(opp))
     message = "\n\n".join(parts)
 

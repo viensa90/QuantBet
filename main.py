@@ -9,7 +9,7 @@ import argparse
 import sys
 from datetime import datetime
 
-from src.config_loader import config, get_api_key   # <-- CORREGIDO: importamos config directamente
+from src.config_loader import ConfigLoader
 from src.logger import setup_logger, log
 from src.connectors.factory import get_provider
 from src.core.arbitrage import ArbitrageEngine
@@ -51,22 +51,26 @@ def main():
     else:
         log.info("QuantBet v0.5.0 iniciado en modo simple")
 
-    # Cargar configuración (ya está cargada al importar config, pero permitimos sobrescribir con args)
-    # Usamos una copia para no modificar el original
-    cfg = config.copy() if isinstance(config, dict) else config
+    # Cargar configuración usando el nuevo Singleton
+    config = ConfigLoader()
 
-    # Sobrescribir config con argumentos de línea de comandos
+    # Sobrescribir con argumentos de línea de comandos (trabajamos con una copia)
+    sports = config['sports'] if 'sports' in config._config else []
+    markets = config['markets'] if 'markets' in config._config else "h2h"
+    min_profit = config['min_profit_percent'] if 'min_profit_percent' in config._config else 1.5
+    allowed_bookmakers = config['allowed_bookmakers'] if 'allowed_bookmakers' in config._config else []
+
     if args.sports:
-        cfg['sports'] = [s.strip() for s in args.sports.split(",")]
+        sports = [s.strip() for s in args.sports.split(",")]
     if args.markets:
-        cfg['markets'] = args.markets
+        markets = args.markets
     if args.min_profit:
-        cfg['min_profit_percent'] = args.min_profit
+        min_profit = args.min_profit
 
-    log.info(f"Deportes: {', '.join(cfg['sports'])}")
-    log.info(f"Mercados: {cfg['markets']}")
-    log.info(f"Profit mínimo: {cfg['min_profit_percent']}%")
-    log.info(f"Bookmakers permitidos: {', '.join(cfg.get('allowed_bookmakers', []))}")
+    log.info(f"Deportes: {', '.join(sports)}")
+    log.info(f"Mercados: {markets}")
+    log.info(f"Profit mínimo: {min_profit}%")
+    log.info(f"Bookmakers permitidos: {', '.join(allowed_bookmakers)}")
 
     # Inicializar proveedor de datos
     provider = get_provider()
@@ -83,9 +87,9 @@ def main():
     total_snapshots = 0
 
     # Pipeline principal
-    for sport_key in cfg['sports']:
+    for sport_key in sports:
         log.info(f"Procesando {sport_key}...")
-        outcomes = provider.fetch(sport_key, markets=cfg['markets'])
+        outcomes = provider.fetch(sport_key, markets=markets)
         
         if not outcomes:
             log.warning(f"Sin datos para {sport_key}")
@@ -94,10 +98,9 @@ def main():
         total_events += len(set(o.event_name for o in outcomes))
         total_snapshots += len(outcomes)
         
-        # Buscar oportunidades de arbitraje
         opportunities = engine.find_opportunities(
             outcomes,
-            min_profit=cfg['min_profit_percent'] / 100
+            min_profit=min_profit / 100
         )
         
         if opportunities:
@@ -123,12 +126,10 @@ def main():
                 print(opp.detail())
             print()
 
-        # Guardar en BD
         if not args.no_save:
             saved = repo.save_batch(all_opportunities)
             log.info(f"{saved} oportunidades guardadas en BD.")
 
-        # Notificar por Telegram
         maybe_notify(all_opportunities)
     else:
         print("😔 No se encontraron oportunidades de arbitraje.")
@@ -137,7 +138,6 @@ def main():
         print("   - Umbral de profit demasiado alto")
         print("   - Bookmakers limitados en el plan gratuito")
         print()
-        log.info("Sin oportunidades. Revisa los filtros o espera a mejores cuotas.")
 
     print(f"Fin: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     log.info("Pipeline finalizado.")

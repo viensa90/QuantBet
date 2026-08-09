@@ -4,7 +4,7 @@ import requests
 
 from src.connectors.base import OddsProvider
 from src.domain.entities import Outcome
-from src.config_loader import config, get_api_key
+from src.config_loader import ConfigLoader
 from src.logger import log
 
 
@@ -12,11 +12,12 @@ class OddsAPIProvider(OddsProvider):
     BASE_URL = "https://api.the-odds-api.com/v4/sports"
 
     def __init__(self):
-        self.api_key = get_api_key("ODDS_API_KEY")
+        cfg = ConfigLoader()
+        self.api_key = cfg.odds_api_key
         if not self.api_key:
             raise ValueError("ODDS_API_KEY no configurada en .env")
-        # Convertir a minúsculas para comparación insensible a mayúsculas/minúsculas
-        self.allowed_bookmakers = {b.lower() for b in config["allowed_bookmakers"]}
+        allowed = cfg['allowed_bookmakers'] if 'allowed_bookmakers' in cfg._config else []
+        self.allowed_bookmakers = {b.lower() for b in allowed}
         self.session = requests.Session()
         self.session.headers.update({"accept": "application/json"})
 
@@ -49,7 +50,6 @@ class OddsAPIProvider(OddsProvider):
                 log.info(f"Créditos restantes The Odds API: {remaining}")
                 return resp
             except requests.exceptions.RequestException as e:
-                # Log seguro sin exponer la API key
                 if hasattr(e, 'response') and e.response is not None:
                     log.warning(f"Intento {attempt+1} fallido: HTTP {e.response.status_code}")
                 else:

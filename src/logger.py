@@ -1,132 +1,63 @@
 """
-Sistema de logging estructurado
-Versión: 0.3.3
+Configuración de logging para QuantBet.
+- Filtra campos sensibles (API key, tokens) en los mensajes.
+- Salida estructurada en consola y archivo.
 """
-
+import os
 import logging
-import sys
-from pathlib import Path
-from typing import Optional, Dict, Any
+from logging.handlers import RotatingFileHandler
 
-from .config_loader import ConfigLoader
-from .logging.handlers import (
-    ElasticsearchHandler,
-    JSONFormatter,
-    ColoredConsoleFormatter
-)
+# --- Filtro para ocultar secretos ---
+class SensitiveFilter(logging.Filter):
+    def __init__(self):
+        super().__init__()
+        # Cargamos los secretos desde .env (si están disponibles)
+        self.api_key = os.getenv('ODDS_API_KEY', '')
+        self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN', '')
 
+    def filter(self, record):
+        if hasattr(record, 'msg') and isinstance(record.msg, str):
+            # Oculta API key
+            if self.api_key:
+                record.msg = record.msg.replace(self.api_key, '***API_KEY***')
+            # Oculta bot token
+            if self.bot_token:
+                record.msg = record.msg.replace(self.bot_token, '***BOT_TOKEN***')
+        return True
 
-def setup_logger(
-    name: Optional[str] = None,
-    config: Optional[Dict[str, Any]] = None
-) -> logging.Logger:
-    """
-    Configurar logger con opciones avanzadas
-    
-    Args:
-        name: Nombre del logger (opcional)
-        config: Configuración personalizada (opcional)
-    
-    Returns:
-        Logger configurado
-    """
-    if config is None:
-        try:
-            config = ConfigLoader().config.get("logs", {})
-        except:
-            config = {}
-    
-    level_str = config.get("level", "INFO")
-    level = getattr(logging, level_str.upper(), logging.INFO)
-    format_type = config.get("format", "json")
-    
-    # Crear logger
-    logger = logging.getLogger(name or "quantbet")
-    logger.setLevel(level)
-    
-    # Limpiar handlers existentes
-    logger.handlers.clear()
-    
-    # --- Console Handler ---
-    if config.get("console", {}).get("enabled", True):
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(level)
-        
-        use_color = config.get("console", {}).get("color", False)
-        
-        if use_color and format_type == "text":
-            console_formatter = ColoredConsoleFormatter('%(message)s')
-        else:
-            if format_type == "json":
-                console_formatter = JSONFormatter()
-            else:
-                console_formatter = logging.Formatter(
-                    '[%(asctime)s] [%(levelname)s] %(name)s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S'
-                )
-        
-        console_handler.setFormatter(console_formatter)
-        logger.addHandler(console_handler)
-    
-    # --- File Handler ---
-    if config.get("file", {}).get("enabled", False):
-        file_config = config.get("file", {})
-        log_path = file_config.get("path", "logs/quantbet.log")
-        
-        # Crear directorio si no existe
-        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-        
-        file_handler = logging.FileHandler(log_path, encoding='utf-8')
-        file_handler.setLevel(level)
-        
-        if format_type == "json":
-            file_formatter = JSONFormatter()
-        else:
-            file_formatter = logging.Formatter(
-                '[%(asctime)s] [%(levelname)s] %(name)s - %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
-            )
-        
-        file_handler.setFormatter(file_formatter)
-        logger.addHandler(file_handler)
-    
-    # --- Elasticsearch Handler ---
-    if config.get("elasticsearch", {}).get("enabled", False):
-        es_config = config.get("elasticsearch", {})
-        es_handler = ElasticsearchHandler(
-            hosts=es_config.get("hosts", ["http://localhost:9200"]),
-            index=es_config.get("index", "quantbet-logs"),
-            username=es_config.get("username"),
-            password=es_config.get("password"),
-            level=level
-        )
-        
-        if format_type == "json":
-            es_handler.setFormatter(JSONFormatter())
-        
-        logger.addHandler(es_handler)
-    
-    return logger
-
-
-def get_logger(name: str) -> logging.Logger:
-    """
-    Obtener logger configurado
-    
-    Args:
-        name: Nombre del logger
-    
-    Returns:
-        Logger
-    """
-    # Verificar si ya está configurado
+# --- Configuración del logger global ---
+def setup_logger(name='QuantBet', log_file='quantbet.log', level=logging.INFO):
     logger = logging.getLogger(name)
-    if not logger.handlers:
-        # Configurar con defaults
-        return setup_logger(name)
-    
-    return logger
+    logger.setLevel(level)
 
+    # Evitar duplicados
+    if logger.handlers:
+        return logger
+
+    # Formato
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    # Handler para consola
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    console.addFilter(SensitiveFilter())
+    logger.addHandler(console)
+
+    # Handler para archivo (rotación)
+    try:
+        file_handler = RotatingFileHandler(
+            log_file, maxBytes=5*1024*1024, backupCount=3
+        )
+        file_handler.setFormatter(formatter)
+        file_handler.addFilter(SensitiveFilter())
+        logger.addHandler(file_handler)
+    except Exception:
+        pass  # Si no se puede escribir el archivo, solo consola
+
+    return logger
 
 # Logger por defecto
-default_logger = setup_logger("quantbet")
+logger = setup_logger()

@@ -4,12 +4,12 @@ from src.domain.entities import Outcome
 from src.logger import log
 
 
-# Colores ANSI para cada bookmaker (puedes ajustarlos a tu gusto)
+# Colores ANSI para terminal (ajustados según identidad visual de las casas)
 BOOKMAKER_COLORS = {
-    'pinnacle': '\033[34m',      # azul
-    'onexbet': '\033[38;5;208m', # naranja
-    'betonlineag': '\033[32m',   # verde
-    'betfair': '\033[33m',       # amarillo
+    'pinnacle': '\033[38;5;208m',   # naranja
+    'onexbet': '\033[36m',          # azul celeste (cyan)
+    'betonlineag': '\033[31m',      # rojo
+    'betfair': '\033[33m',          # amarillo
 }
 RESET_COLOR = '\033[0m'
 
@@ -72,7 +72,6 @@ class ArbitrageEngine:
         Agrupa outcomes por (event_name, market, point) y busca combinaciones de bookmakers
         que cubran todos los resultados (arbitraje).
         """
-        # Agrupar por clave: (event_name, market, point)
         grouped = {}
         for o in outcomes:
             key = (o.event_name, o.market, o.point)
@@ -80,35 +79,24 @@ class ArbitrageEngine:
 
         opportunities = []
         for (event, market, point), group in grouped.items():
-            # Ignorar mercados con _lay (ya filtrados aguas arriba)
-            # Separar por nombre de resultado (equipo 1, empate, equipo 2, Over, Under...)
             by_name = {}
             for o in group:
                 name = o.name
                 by_name.setdefault(name, []).append(o)
 
-            # Si no hay suficientes nombres diferentes, no hay oportunidad
             if len(by_name) < 2:
                 continue
 
-            # Obtener todas las combinaciones de bookmakers que cubren todos los nombres
             names = list(by_name.keys())
-            # Para cada nombre tenemos una lista de outcomes (con sus bookmakers)
-            # Queremos elegir un outcome por nombre, de distinto bookmaker, pero el motor actual
-            # permite que una casa aparezca en varios nombres? El arbitraje clásico requiere una apuesta por nombre,
-            # y no hay problema si el mismo bookmaker ofrece dos cuotas para el mismo evento, pero normalmente no se puede.
-            # Por simplicidad tomamos la mejor cuota disponible para cada nombre (la más alta).
             best_odds = {}
             for name, lst in by_name.items():
                 best = max(lst, key=lambda x: x.price)
                 best_odds[name] = best
 
-            # Verificar si existe arbitraje: sum(1/price) < 1
             inverse_sum = sum(1.0 / best_odds[name].price for name in names)
             if inverse_sum < 1:
                 profit = (1.0 / inverse_sum) - 1.0
                 if profit >= min_profit:
-                    # Construir lista de outcomes seleccionados (tupla: bookmaker, name, price, point)
                     arb_outcomes = []
                     for name in names:
                         o = best_odds[name]

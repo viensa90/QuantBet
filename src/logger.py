@@ -1,63 +1,47 @@
-"""
-Configuración de logging para QuantBet.
-- Filtra campos sensibles (API key, tokens) en los mensajes.
-- Salida estructurada en consola y archivo.
-"""
-import os
 import logging
-from logging.handlers import RotatingFileHandler
+import sys
+from pathlib import Path
 
-# --- Filtro para ocultar secretos ---
-class SensitiveFilter(logging.Filter):
-    def __init__(self):
-        super().__init__()
-        # Cargamos los secretos desde .env (si están disponibles)
-        self.api_key = os.getenv('ODDS_API_KEY', '')
-        self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN', '')
+# Logger global creado de inmediato (sin riesgo de fallo en importación)
+log = logging.getLogger("quantbet")
+log.setLevel(logging.DEBUG)
 
-    def filter(self, record):
-        if hasattr(record, 'msg') and isinstance(record.msg, str):
-            # Oculta API key
-            if self.api_key:
-                record.msg = record.msg.replace(self.api_key, '***API_KEY***')
-            # Oculta bot token
-            if self.bot_token:
-                record.msg = record.msg.replace(self.bot_token, '***BOT_TOKEN***')
-        return True
+# Handler por defecto en consola para que siempre haya salida,
+# incluso antes de llamar a setup_logger()
+_console_handler = logging.StreamHandler(sys.stdout)
+_console_handler.setFormatter(
+    logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s',
+                      datefmt='%Y-%m-%d %H:%M:%S')
+)
+log.addHandler(_console_handler)
 
-# --- Configuración del logger global ---
-def setup_logger(name='QuantBet', log_file='quantbet.log', level=logging.INFO):
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
+def setup_logger(simple_mode=False):
+    """
+    Reconfigura el logger global:
+    - simple_mode: solo muestra INFO en consola
+    - siempre guarda DEBUG en archivo 'logs/quantbet.log'
+    """
+    # Limpiar handlers anteriores
+    log.handlers.clear()
 
-    # Evitar duplicados
-    if logger.handlers:
-        return logger
-
-    # Formato
+    # Formateador común
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        '%(asctime)s | %(levelname)-8s | %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    # Handler para consola
-    console = logging.StreamHandler()
+    # Consola
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(logging.INFO if simple_mode else logging.DEBUG)
     console.setFormatter(formatter)
-    console.addFilter(SensitiveFilter())
-    logger.addHandler(console)
+    log.addHandler(console)
 
-    # Handler para archivo (rotación)
-    try:
-        file_handler = RotatingFileHandler(
-            log_file, maxBytes=5*1024*1024, backupCount=3
-        )
-        file_handler.setFormatter(formatter)
-        file_handler.addFilter(SensitiveFilter())
-        logger.addHandler(file_handler)
-    except Exception:
-        pass  # Si no se puede escribir el archivo, solo consola
+    # Archivo (siempre DEBUG)
+    log_dir = Path(__file__).parent.parent / 'logs'
+    log_dir.mkdir(exist_ok=True)
+    file_handler = logging.FileHandler(log_dir / 'quantbet.log', encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+    log.addHandler(file_handler)
 
-    return logger
-
-# Logger por defecto
-logger = setup_logger()
+    log.debug("Logger configurado.")

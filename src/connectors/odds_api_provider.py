@@ -2,13 +2,13 @@ import time
 from typing import List, Dict
 import requests
 
-from src.connectors.base import OddsProvider
+from src.connectors.base import IDataProvider
 from src.domain.entities import Outcome
 from src.config_loader import ConfigLoader
 from src.logger import log
 
 
-class OddsAPIProvider(OddsProvider):
+class OddsAPIProvider(IDataProvider):
     BASE_URL = "https://api.the-odds-api.com/v4/sports"
 
     def __init__(self):

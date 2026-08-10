@@ -3,110 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuantBet - Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>QuantBet – Oportunidades de Arbitraje</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 20px; background: #f5f5f5; }
+        h1 { color: #1a1a1a; }
+        .summary { background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .event-name { font-size: 1.3em; font-weight: bold; }
+        .sport { color: #666; font-size: 0.9em; }
+        .profit { background: #e6ffe6; color: #0a5e0a; padding: 4px 10px; border-radius: 12px; font-weight: bold; }
+        .market { color: #555; margin-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
+        th { background: #f9f9f9; }
+        .outcome-name { font-weight: 500; }
+        .bookmaker { color: #333; }
+        .stake { font-weight: bold; }
+        .totals { margin-top: 10px; font-size: 0.95em; }
+        .totals span { margin-right: 15px; }
+        .timestamp { color: #888; font-size: 0.85em; margin-top: 5px; }
+        .no-opps { text-align: center; color: #888; margin-top: 40px; }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <h1>📊 QuantBet Dashboard</h1>
-            <div class="header-info">
-                <span id="version">v0.3.3</span>
-                <span class="dot"></span>
-                <span id="last-update">Actualizado: hace un momento</span>
-            </div>
-        </header>
+    <h1>🎯 QuantBet – Oportunidades de Arbitraje</h1>
+    <div class="summary" id="summary">Cargando...</div>
+    <div id="opportunities"></div>
 
-        <div class="grid">
-            <!-- Tarjeta: Total Oportunidades -->
-            <div class="card">
-                <div class="card-title">🎯 Total Oportunidades</div>
-                <div class="card-value" id="total-opportunities">0</div>
-                <div class="card-subtitle">Oportunidades detectadas</div>
-            </div>
+    <script>
+        const sportNames = {
+            'soccer_spain_la_liga': 'La Liga',
+            'soccer_epl': 'Premier League',
+            'tennis_atp': 'ATP Tennis',
+            'basketball_nba': 'NBA'
+        };
 
-            <!-- Tarjeta: Mercados Activos -->
-            <div class="card">
-                <div class="card-title">📈 Mercados Activos</div>
-                <div class="card-value" id="active-markets">0</div>
-                <div class="card-subtitle">Mercados configurados</div>
-            </div>
+        function formatDate(isoString) {
+            if (!isoString) return '';
+            const d = new Date(isoString);
+            return d.toLocaleString('es-PY', { dateStyle: 'short', timeStyle: 'short' });
+        }
 
-            <!-- Tarjeta: Arbitraje -->
-            <div class="card">
-                <div class="card-title">🔄 Arbitraje</div>
-                <div class="card-value" id="arbitrage-count">0</div>
-                <div class="card-subtitle">Oportunidades de arbitraje</div>
-            </div>
+        async function loadData() {
+            try {
+                const [oppRes, metricsRes] = await Promise.all([
+                    fetch('/api/v1/opportunities?limit=50'),
+                    fetch('/api/v1/metrics')
+                ]);
+                const opps = await oppRes.json();
+                const metrics = await metricsRes.json();
 
-            <!-- Tarjeta: Value Betting -->
-            <div class="card">
-                <div class="card-title">💎 Value Betting</div>
-                <div class="card-value" id="value-count">0</div>
-                <div class="card-subtitle">Apuestas con valor</div>
-            </div>
-        </div>
+                document.getElementById('summary').innerHTML = `
+                    <strong>${metrics.total_opportunities}</strong> oportunidades detectadas |
+                    Profit promedio: <strong>${metrics.average_profit_percent}%</strong>
+                `;
 
-        <div class="charts-row">
-            <!-- Gráfico: Oportunidades por Estrategia -->
-            <div class="chart-card">
-                <div class="card-title">📊 Oportunidades por Estrategia</div>
-                <div class="chart-container">
-                    <canvas id="strategyChart"></canvas>
-                </div>
-            </div>
+                const container = document.getElementById('opportunities');
+                if (!opps.length) {
+                    container.innerHTML = '<div class="no-opps">🔍 No se encontraron oportunidades.</div>';
+                    return;
+                }
 
-            <!-- Gráfico: Tendencia de Oportunidades -->
-            <div class="chart-card">
-                <div class="card-title">📈 Tendencia de Oportunidades</div>
-                <div class="chart-container">
-                    <canvas id="trendChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tabla: Últimas Oportunidades -->
-        <div class="table-card">
-            <div class="card-title">🔍 Últimas Oportunidades</div>
-            <div class="table-container">
-                <table>
-                    <thead>
+                container.innerHTML = opps.map(opp => {
+                    const details = opp.details;
+                    const outcomes = details.outcomes || [];
+                    const rows = outcomes.map(o => `
                         <tr>
-                            <th>Evento</th>
-                            <th>Deporte</th>
-                            <th>Mercado</th>
-                            <th>Estrategia</th>
-                            <th>Beneficio %</th>
+                            <td class="outcome-name">${o.outcome}</td>
+                            <td class="bookmaker">${o.bookmaker}</td>
+                            <td>${o.odds}</td>
+                            <td class="stake">${o.stake.toFixed(2)} €</td>
                         </tr>
-                    </thead>
-                    <tbody id="opportunities-table">
-                        <tr><td colspan="5">Cargando oportunidades...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                    `).join('');
 
-        <!-- Estado del Sistema -->
-        <div class="status-card">
-            <div class="card-title">⚙️ Estado del Sistema</div>
-            <div id="system-status">
-                <div class="status-item">
-                    <span class="status-label">Base de datos:</span>
-                    <span class="status-value" id="db-status">-</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Conectores:</span>
-                    <span class="status-value" id="connectors-status">-</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Modelos cargados:</span>
-                    <span class="status-value" id="models-status">-</span>
-                </div>
-            </div>
-        </div>
-    </div>
+                    const sportReadable = sportNames[opp.sport] || opp.sport;
+                    const event = opp.event_name || 'Evento desconocido';
+                    const market = opp.market || '-';
 
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+                    return `
+                    <div class="card">
+                        <div class="header">
+                            <div>
+                                <div class="event-name">⚽ ${event}</div>
+                                <div class="sport">${sportReadable} · ${market}</div>
+                            </div>
+                            <div class="profit">+${opp.profit_percent.toFixed(2)}%</div>
+                        </div>
+                        <table>
+                            <thead>
+                                <tr><th>Resultado</th><th>Bookmaker</th><th>Cuota</th><th>Stake</th></tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                        <div class="totals">
+                            <span>💰 Inversión total: <strong>${details.total_investment.toFixed(2)} €</strong></span>
+                            <span>📈 Retorno garantizado: <strong>${details.guaranteed_return.toFixed(2)} €</strong></span>
+                            <span>💵 Ganancia neta: <strong>${(details.guaranteed_return - details.total_investment).toFixed(2)} €</strong></span>
+                        </div>
+                        <div class="timestamp">🕒 ${formatDate(opp.timestamp)}</div>
+                    </div>`;
+                }).join('');
+            } catch (err) {
+                document.getElementById('opportunities').innerHTML = '<div class="no-opps">❌ Error al cargar datos.</div>';
+                console.error(err);
+            }
+        }
+
+        loadData();
+    </script>
 </body>
 </html>

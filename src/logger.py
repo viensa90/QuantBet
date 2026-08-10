@@ -1,47 +1,38 @@
+"""
+Sistema de logging estructurado para QuantBet.
+"""
 import logging
+import json
 import sys
-from pathlib import Path
+from datetime import datetime
 
-# Logger global creado de inmediato (sin riesgo de fallo en importación)
-log = logging.getLogger("quantbet")
-log.setLevel(logging.DEBUG)
+class JsonFormatter(logging.Formatter):
+    def format(self, record):
+        log_record = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "module": record.module,
+            "function": record.funcName,
+            "line": record.lineno,
+            "thread": record.threadName,
+            "process": record.process
+        }
+        return json.dumps(log_record)
 
-# Handler por defecto en consola para que siempre haya salida,
-# incluso antes de llamar a setup_logger()
-_console_handler = logging.StreamHandler(sys.stdout)
-_console_handler.setFormatter(
-    logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s',
-                      datefmt='%Y-%m-%d %H:%M:%S')
-)
-log.addHandler(_console_handler)
-
-def setup_logger(simple_mode=False):
+def get_logger(name: str) -> logging.Logger:
     """
-    Reconfigura el logger global:
-    - simple_mode: solo muestra INFO en consola
-    - siempre guarda DEBUG en archivo 'logs/quantbet.log'
+    Devuelve un logger configurado con formato JSON.
+    Reemplaza al antiguo setup_logger para mantener compatibilidad.
     """
-    # Limpiar handlers anteriores
-    log.handlers.clear()
+    logger = logging.getLogger(name)
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(JsonFormatter())
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+    return logger
 
-    # Formateador común
-    formatter = logging.Formatter(
-        '%(asctime)s | %(levelname)-8s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-
-    # Consola
-    console = logging.StreamHandler(sys.stdout)
-    console.setLevel(logging.INFO if simple_mode else logging.DEBUG)
-    console.setFormatter(formatter)
-    log.addHandler(console)
-
-    # Archivo (siempre DEBUG)
-    log_dir = Path(__file__).parent.parent / 'logs'
-    log_dir.mkdir(exist_ok=True)
-    file_handler = logging.FileHandler(log_dir / 'quantbet.log', encoding='utf-8')
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(formatter)
-    log.addHandler(file_handler)
-
-    log.debug("Logger configurado.")
+# Alias para compatibilidad con código antiguo
+setup_logger = get_logger

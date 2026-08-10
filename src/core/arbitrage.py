@@ -12,14 +12,9 @@ class ArbitrageOpportunity:
 
 class ArbitrageEngine:
     def find_opportunities(self, event: Any) -> List[ArbitrageOpportunity]:
-        """
-        Encuentra oportunidades de arbitraje en un AggregatedEvent (duck typing).
-        event debe tener: event_name, sport, market, outcomes (lista de objetos con bookmaker, name, price, point).
-        """
-        # Agrupar outcomes por clave única: (name, point)
         outcomes_map = {}
         for oc in event.outcomes:
-            key = (oc.name, oc.point)   # point puede ser None
+            key = (oc.name, oc.point)
             outcomes_map.setdefault(key, []).append((oc.bookmaker, oc.price))
 
         if len(outcomes_map) < 2:
@@ -38,7 +33,8 @@ class ArbitrageEngine:
                 continue
             inv_sum = sum(1/o for o in odds_list)
             if inv_sum < 1.0:
-                profit_percent = (1 - inv_sum) * 100
+                # Rentabilidad real sobre la inversión (ROI)
+                profit_percent = (1 / inv_sum - 1) * 100
                 stakes = []
                 for odd in odds_list:
                     stake = (total_investment * (1/odd)) / inv_sum

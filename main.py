@@ -52,7 +52,7 @@ def run_pipeline(source='oddsapi', save=True, simple=False):
         )]
         valid_opps = final_opps
     else:
-        dedup_window = None  # no se guarda, se muestran todas
+        dedup_window = None
 
     print_summary(valid_opps, simple)
 

@@ -30,7 +30,6 @@ class Database:
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             );
         ''')
-        # Índice para acelerar la detección de duplicados
         self.conn.execute('''
             CREATE INDEX IF NOT EXISTS idx_opp_event_market_profit 
             ON opportunities(event_name, market, profit_percent, timestamp)

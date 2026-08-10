@@ -5,6 +5,7 @@ import requests
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 from time import sleep
+from datetime import datetime, timezone
 from src.logger import get_logger
 
 logger = get_logger(__name__)
@@ -40,16 +41,34 @@ class OddsAPIProvider:
         self.allowed_bookmakers = [b.lower() for b in config.get("allowed_bookmakers", [])]
         self.timeout = config.get("timeout", 10)
         self.max_retries = config.get("max_retries", 3)
+        self.exclude_live = config.get("exclude_live", True)
+        self.min_minutes_to_start = config.get("min_minutes_to_start", 0)
 
     def get_events(self) -> List[AggregatedEvent]:
         aggregated_events = []
+        now = datetime.now(timezone.utc)
         for sport in self.sports:
             try:
                 sport_events = self._fetch_sport(sport)
+                if self.exclude_live:
+                    sport_events = [
+                        e for e in sport_events
+                        if e.timestamp and self._is_future(e.timestamp, now)
+                    ]
+                    logger.info("Eventos después de filtrar en vivo: %d", len(sport_events))
                 aggregated_events.extend(sport_events)
             except Exception as e:
                 logger.error("Error obteniendo eventos para %s: %s", sport, e)
         return aggregated_events
+
+    def _is_future(self, commence_time_str: str, now: datetime) -> bool:
+        """True si el evento empieza al menos dentro de min_minutes_to_start minutos."""
+        try:
+            event_time = datetime.fromisoformat(commence_time_str.replace("Z", "+00:00"))
+            margin = self.min_minutes_to_start * 60
+            return (event_time - now).total_seconds() > margin
+        except:
+            return True
 
     def _fetch_sport(self, sport: str) -> List[AggregatedEvent]:
         url = f"{self.base_url}/sports/{sport}/odds"

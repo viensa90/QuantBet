@@ -24,11 +24,16 @@ class Database:
                 sport TEXT,
                 market TEXT,
                 strategy TEXT,
-                details TEXT,  -- JSON con desglose de stakes y bookmakers
+                details TEXT,
                 profit REAL,
                 profit_percent REAL,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             );
+        ''')
+        # Índice para acelerar la detección de duplicados
+        self.conn.execute('''
+            CREATE INDEX IF NOT EXISTS idx_opp_event_market_profit 
+            ON opportunities(event_name, market, profit_percent, timestamp)
         ''')
         self.conn.commit()
 

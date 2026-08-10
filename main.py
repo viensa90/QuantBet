@@ -6,7 +6,7 @@ from src.connectors.factory import ConnectorFactory
 from src.core.arbitrage import ArbitrageEngine
 from src.storage.database import Database
 from src.storage.repository import Repository
-from src.notifications.telegram_notifier import maybe_notify   # ← corregido
+from src.notifications.telegram_notifier import maybe_notify
 import logging as _logging
 
 logger = get_logger(__name__)
@@ -31,6 +31,8 @@ def run_pipeline(source='oddsapi', save=True, simple=False):
     min_profit = config['arbitrage']['min_profit_percent']
     valid_opps = [o for o in all_opportunities if o.profit_percent >= min_profit]
 
+    # Deduplicación
+    dedup_window = config['pipeline'].get('dedup_window_hours', 1)
     if valid_opps and save:
         opp_dicts = [{
             'event_name': o.event_name,
@@ -41,14 +43,22 @@ def run_pipeline(source='oddsapi', save=True, simple=False):
             'profit': o.profit,
             'profit_percent': o.profit_percent
         } for o in valid_opps]
-        repo.save_opportunities(opp_dicts)
+        # Guardar y obtener solo las nuevas
+        new_opps = repo.save_opportunities(opp_dicts, dedup_window_hours=dedup_window)
+        # Convertir de dict a objetos para la notificación y el resumen
+        final_opps = [o for o in valid_opps if any(
+            o.event_name == no['event_name'] and o.market == no['market'] and o.profit_percent == no['profit_percent']
+            for no in new_opps
+        )]
+        valid_opps = final_opps
+    else:
+        dedup_window = None  # no se guarda, se muestran todas
 
     print_summary(valid_opps, simple)
 
-    # Notificación Telegram (ahora como función, no como clase)
     if valid_opps:
         try:
-            maybe_notify(valid_opps)        # ← corregido
+            maybe_notify(valid_opps)
         except Exception as e:
             logger.error(f"Error enviando notificación: {e}")
 

@@ -2,18 +2,17 @@ import argparse
 import sys
 from src.config_loader import ConfigLoader
 from src.logger import get_logger
-from src.connectors.factory import ConnectorFactory          # ← clase real
+from src.connectors.factory import ConnectorFactory
 from src.core.arbitrage import ArbitrageEngine
 from src.storage.database import Database
 from src.storage.repository import Repository
-from src.notifications.telegram_notifier import TelegramNotifier
+from src.notifications.telegram_notifier import maybe_notify   # ← corregido
 import logging as _logging
 
 logger = get_logger(__name__)
 
 def run_pipeline(source='oddsapi', save=True, simple=False):
     config = ConfigLoader()
-    # Configurar nivel de logs según modo simple
     log_level = _logging.WARNING if simple else _logging.INFO
     _logging.getLogger().setLevel(log_level)
 
@@ -21,9 +20,7 @@ def run_pipeline(source='oddsapi', save=True, simple=False):
     db = Database()
     repo = Repository(db)
 
-    # Crear el proveedor pasando la configuración completa
     provider = ConnectorFactory.create(source, config._config)
-
     snapshots = provider.get_events()
 
     all_opportunities = []
@@ -31,7 +28,6 @@ def run_pipeline(source='oddsapi', save=True, simple=False):
         opps = engine.find_opportunities(snap)
         all_opportunities.extend(opps)
 
-    # Filtrar por umbral mínimo
     min_profit = config['arbitrage']['min_profit_percent']
     valid_opps = [o for o in all_opportunities if o.profit_percent >= min_profit]
 
@@ -47,14 +43,12 @@ def run_pipeline(source='oddsapi', save=True, simple=False):
         } for o in valid_opps]
         repo.save_opportunities(opp_dicts)
 
-    # Imprimir resumen
     print_summary(valid_opps, simple)
 
-    # Notificaciones Telegram
+    # Notificación Telegram (ahora como función, no como clase)
     if valid_opps:
         try:
-            notifier = TelegramNotifier(config.telegram_token, config.telegram_chat_id)
-            notifier.send_opportunities(valid_opps)
+            maybe_notify(valid_opps)        # ← corregido
         except Exception as e:
             logger.error(f"Error enviando notificación: {e}")
 

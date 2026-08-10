@@ -8,3 +8,8 @@ odds_api:
     - soccer_epl
   markets: "h2h,totals"
   regions: eu
+  allowed_bookmakers:
+    - Pinnacle
+    - 1xBet
+    - BetOnline.ag
+    - Betfair

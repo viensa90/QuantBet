@@ -1,147 +1,91 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-QuantBet - Sistema de Arbitraje Deportivo Automatizado
-Versión: 0.5.0
-"""
-
 import argparse
 import sys
-from datetime import datetime
-
 from src.config_loader import ConfigLoader
-from src.logger import setup_logger, log
-from src.connectors.factory import get_provider
+from src.logger import get_logger
+from src.connectors.factory import ConnectorFactory          # ← clase real
 from src.core.arbitrage import ArbitrageEngine
-from src.storage.database import init_db
-from src.storage.repository import OpportunityRepository
-from src.notifications.telegram_notifier import maybe_notify
+from src.storage.database import Database
+from src.storage.repository import Repository
+from src.notifications.telegram_notifier import TelegramNotifier
+import logging as _logging
 
+logger = get_logger(__name__)
 
-def banner():
-    print("""
- ██████╗ ██╗   ██╗ █████╗ ███╗   ██╗████████╗██████╗ ███████╗████████╗
-██╔═══██╗██║   ██║██╔══██╗████╗  ██║╚══██╔══╝██╔══██╗██╔════╝╚══██╔══╝
-██║   ██║██║   ██║███████║██╔██╗ ██║   ██║   ██████╔╝█████╗     ██║
-██║▄▄ ██║██║   ██║██╔══██║██║╚██╗██║   ██║   ██╔══██╗██╔══╝     ██║
-╚██████╔╝╚██████╔╝██║  ██║██║ ╚████║   ██║   ██████╔╝███████╗   ██║
- ╚══▀▀═╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═════╝ ╚══════╝   ╚═╝
-    """)
-    print("QuantBet - Arbitraje Deportivo Automatizado")
-    print("=" * 60)
-    print(f"Inicio: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print()
-
-
-def main():
-    parser = argparse.ArgumentParser(description="QuantBet - Arbitraje Deportivo Automatizado")
-    parser.add_argument("--simple", action="store_true", help="Salida simplificada (sin arte ASCII)")
-    parser.add_argument("--no-save", action="store_true", help="No persistir en BD")
-    parser.add_argument("--sports", type=str, help="Filtrar deportes (separados por coma)")
-    parser.add_argument("--markets", type=str, help="Filtrar mercados (separados por coma)")
-    parser.add_argument("--min-profit", type=float, help="Umbral de profit mínimo (%)")
-    args = parser.parse_args()
-
-    # Configurar logger
-    setup_logger()
-
-    # Banner
-    if not args.simple:
-        banner()
-    else:
-        log.info("QuantBet v0.5.0 iniciado en modo simple")
-
-    # Cargar configuración usando el nuevo Singleton
+def run_pipeline(source='oddsapi', save=True, simple=False):
     config = ConfigLoader()
+    # Configurar nivel de logs según modo simple
+    log_level = _logging.WARNING if simple else _logging.INFO
+    _logging.getLogger().setLevel(log_level)
 
-    # Sobrescribir con argumentos de línea de comandos (trabajamos con una copia)
-    sports = config['sports'] if 'sports' in config._config else []
-    markets = config['markets'] if 'markets' in config._config else "h2h"
-    min_profit = config['min_profit_percent'] if 'min_profit_percent' in config._config else 1.5
-    allowed_bookmakers = config['allowed_bookmakers'] if 'allowed_bookmakers' in config._config else []
-
-    if args.sports:
-        sports = [s.strip() for s in args.sports.split(",")]
-    if args.markets:
-        markets = args.markets
-    if args.min_profit:
-        min_profit = args.min_profit
-
-    log.info(f"Deportes: {', '.join(sports)}")
-    log.info(f"Mercados: {markets}")
-    log.info(f"Profit mínimo: {min_profit}%")
-    log.info(f"Bookmakers permitidos: {', '.join(allowed_bookmakers)}")
-
-    # Inicializar proveedor de datos
-    provider = get_provider()
-
-    # Inicializar base de datos (WAL activado)
-    init_db()
-
-    # Inicializar repositorio y motor de arbitraje
-    repo = OpportunityRepository()
     engine = ArbitrageEngine()
+    db = Database()
+    repo = Repository(db)
+
+    # Crear el proveedor pasando la configuración completa
+    provider = ConnectorFactory.create(source, config._config)
+
+    snapshots = provider.get_events()
 
     all_opportunities = []
-    total_events = 0
-    total_snapshots = 0
+    for snap in snapshots:
+        opps = engine.find_opportunities(snap)
+        all_opportunities.extend(opps)
 
-    # Pipeline principal
-    for sport_key in sports:
-        log.info(f"Procesando {sport_key}...")
-        outcomes = provider.fetch(sport_key, markets=markets)
-        
-        if not outcomes:
-            log.warning(f"Sin datos para {sport_key}")
-            continue
-        
-        total_events += len(set(o.event_name for o in outcomes))
-        total_snapshots += len(outcomes)
-        
-        opportunities = engine.find_opportunities(
-            outcomes,
-            min_profit=min_profit / 100
-        )
-        
-        if opportunities:
-            log.info(f"  -> {len(opportunities)} oportunidades en {sport_key}")
-            all_opportunities.extend(opportunities)
+    # Filtrar por umbral mínimo
+    min_profit = config['arbitrage']['min_profit_percent']
+    valid_opps = [o for o in all_opportunities if o.profit_percent >= min_profit]
 
-    # Mostrar resultados
-    print()
-    log.info(f"Resumen: {total_events} eventos, {total_snapshots} snapshots, {len(all_opportunities)} oportunidades")
-    print()
+    if valid_opps and save:
+        opp_dicts = [{
+            'event_name': o.event_name,
+            'sport': o.sport,
+            'market': o.market,
+            'strategy': 'arbitrage',
+            'details': o.details,
+            'profit': o.profit,
+            'profit_percent': o.profit_percent
+        } for o in valid_opps]
+        repo.save_opportunities(opp_dicts)
 
-    if all_opportunities:
-        print("=" * 60)
-        print(f"   🚀 OPORTUNIDADES DE ARBITRAJE ENCONTRADAS: {len(all_opportunities)}")
-        print("=" * 60)
-        print()
-        
-        for i, opp in enumerate(all_opportunities, 1):
-            print(f"--- Oportunidad #{i} ---")
-            if args.simple:
-                print(opp.summary())
-            else:
-                print(opp.detail())
-            print()
+    # Imprimir resumen
+    print_summary(valid_opps, simple)
 
-        if not args.no_save:
-            saved = repo.save_batch(all_opportunities)
-            log.info(f"{saved} oportunidades guardadas en BD.")
+    # Notificaciones Telegram
+    if valid_opps:
+        try:
+            notifier = TelegramNotifier(config.telegram_token, config.telegram_chat_id)
+            notifier.send_opportunities(valid_opps)
+        except Exception as e:
+            logger.error(f"Error enviando notificación: {e}")
 
-        maybe_notify(all_opportunities)
-    else:
-        print("😔 No se encontraron oportunidades de arbitraje.")
-        print("   Posibles causas:")
-        print("   - Mercados muy eficientes en este momento")
-        print("   - Umbral de profit demasiado alto")
-        print("   - Bookmakers limitados en el plan gratuito")
-        print()
+def print_summary(opportunities, simple):
+    if not opportunities:
+        print("\n🔍 No se encontraron oportunidades de arbitraje.\n")
+        return
 
-    print(f"Fin: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    log.info("Pipeline finalizado.")
+    print(f"\n🎯 {len(opportunities)} OPORTUNIDADES DE ARBITRAJE DETECTADAS\n")
+    for opp in opportunities:
+        print(f"⚽ {opp.event_name} ({opp.sport}) – {opp.market}")
+        if simple:
+            for outcome in opp.details['outcomes']:
+                print(f"   {outcome['outcome']}: {outcome['bookmaker']} @ {outcome['odds']} (Stake: {outcome['stake']:.2f}€)")
+            print(f"   Inversión total: {opp.details['total_investment']:.2f}€ → Retorno: {opp.details['guaranteed_return']:.2f}€ (+{opp.profit_percent:.2f}%)\n")
+        else:
+            import json
+            print(json.dumps(opp.__dict__, indent=2))
 
+def main():
+    parser = argparse.ArgumentParser(description='QuantBet - Sistema de Arbitraje')
+    parser.add_argument('--source', default='oddsapi', choices=['csv', 'oddsapi'],
+                        help='Fuente de datos (default: oddsapi)')
+    parser.add_argument('--mode', default='all',
+                        help='Modo de ejecución (actualmente solo "all")')
+    parser.add_argument('--simple', action='store_true',
+                        help='Salida limpia, sin logs técnicos')
+    parser.add_argument('--no-save', action='store_false', dest='save',
+                        help='No guardar en base de datos')
+    args = parser.parse_args()
+    run_pipeline(source=args.source, save=args.save, simple=args.simple)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

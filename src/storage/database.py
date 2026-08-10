@@ -1,49 +1,36 @@
-"""
-Módulo de base de datos SQLite con WAL activado.
-- Migración automática al iniciar.
-- WAL (Write-Ahead Logging) para mejor concurrencia.
-"""
 import sqlite3
-import os
-from src.logger import logger  # ✅ Solo importamos el logger global
+from pathlib import Path
+from src.logger import get_logger
 
-# Ruta de la base de datos (relativa al proyecto)
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "quantbet.db")
+logger = get_logger(__name__)
 
-def get_connection():
-    """Retorna una conexión a la BD con WAL activado."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL")   # Permite lectura/escritura simultánea
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+class Database:
+    def __init__(self, db_path='quantbet.db'):
+        self.db_path = Path(db_path)
+        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        self._enable_wal()
+        self._migrate()
 
-def initialize_database():
-    """Crea las tablas si no existen (migración automática)."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    # Tabla de oportunidades de arbitraje
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS opportunities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sport TEXT NOT NULL,
-            event_name TEXT NOT NULL,
-            market TEXT NOT NULL,
-            combination TEXT NOT NULL,
-            profit_percent REAL NOT NULL,
-            bet_info TEXT NOT NULL,
-            details TEXT NOT NULL,   -- JSON
-            created_at TEXT NOT NULL
-        )
-    """)
-    
-    # Índices para consultas rápidas
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_opportunities_sport ON opportunities(sport)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_opportunities_created ON opportunities(created_at DESC)")
-    
-    conn.commit()
-    conn.close()
-    logger.info("Base de datos inicializada/verificada en: %s", DB_PATH)
+    def _enable_wal(self):
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        logger.info("SQLite WAL mode enabled")
 
-# Ejecutar migración al cargar el módulo
-initialize_database()
+    def _migrate(self):
+        self.conn.executescript('''
+            CREATE TABLE IF NOT EXISTS opportunities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_name TEXT NOT NULL DEFAULT 'Desconocido',
+                sport TEXT,
+                market TEXT,
+                strategy TEXT,
+                details TEXT,  -- JSON con desglose de stakes y bookmakers
+                profit REAL,
+                profit_percent REAL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        ''')
+        self.conn.commit()
+
+    def get_connection(self):
+        return self.conn

@@ -1,76 +1,36 @@
-"""
-Repositorio para oportunidades de arbitraje.
-- Solo INSERT (snapshots inmutables).
-- WAL activado (desde database.py).
-"""
 import json
-import sqlite3
 from datetime import datetime
-from typing import List, Optional
-from src.domain.entities import ArbitrageOpportunity
-from src.storage.database import get_connection
-from src.logger import logger
+from src.storage.database import Database
+from src.logger import get_logger
 
-class OpportunityRepository:
-    def save_opportunity(self, opp: ArbitrageOpportunity) -> int:
-        """Guarda una oportunidad en la BD (INSERT)."""
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO opportunities (
-                sport, event_name, market, combination,
-                profit_percent, bet_info, details, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            opp.sport,
-            opp.event_name,
-            opp.market,
-            opp.combination,
-            opp.profit_percent,
-            opp.bet_info,
-            json.dumps(opp.details, ensure_ascii=False),
-            datetime.now().isoformat()
-        ))
+logger = get_logger(__name__)
+
+class Repository:
+    def __init__(self, database: Database):
+        self.db = database
+
+    def save_opportunities(self, opportunities):
+        """Guarda una lista de oportunidades (dict) en la BD."""
+        conn = self.db.get_connection()
+        for opp in opportunities:
+            conn.execute('''
+                INSERT INTO opportunities (event_name, sport, market, strategy, details, profit, profit_percent)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                opp.get('event_name', 'Desconocido'),
+                opp.get('sport', ''),
+                opp.get('market', ''),
+                opp.get('strategy', 'arbitrage'),
+                json.dumps(opp.get('details', {})),
+                opp.get('profit'),
+                opp.get('profit_percent')
+            ))
         conn.commit()
-        last_id = cursor.lastrowid
-        conn.close()
-        logger.debug("Oportunidad guardada con ID: %d", last_id)
-        return last_id
+        logger.info(f"Guardadas {len(opportunities)} oportunidades en BD")
 
-    def get_recent(self, limit: int = 10) -> List[ArbitrageOpportunity]:
-        """Obtiene las últimas N oportunidades guardadas."""
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT sport, event_name, market, combination,
-                   profit_percent, bet_info, details, created_at
-            FROM opportunities
-            ORDER BY created_at DESC
-            LIMIT ?
-        """, (limit,))
-        rows = cursor.fetchall()
-        conn.close()
-
-        opportunities = []
-        for row in rows:
-            opp = ArbitrageOpportunity(
-                sport=row[0],
-                event_name=row[1],
-                market=row[2],
-                combination=row[3],
-                profit_percent=row[4],
-                bet_info=row[5],
-                details=json.loads(row[6]) if row[6] else {},
-                created_at=row[7]
-            )
-            opportunities.append(opp)
-        return opportunities
-
-    def count_all(self) -> int:
-        """Cuenta total de oportunidades en BD."""
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM opportunities")
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count
+    def get_opportunities(self, limit=100):
+        conn = self.db.get_connection()
+        rows = conn.execute('''
+            SELECT * FROM opportunities ORDER BY timestamp DESC LIMIT ?
+        ''', (limit,)).fetchall()
+        return [dict(row) for row in rows]

@@ -1,14 +1,10 @@
-# QuantBet Configuration v0.5.0
-sports:
-  - soccer_spain_la_liga
-  - soccer_epl
-markets: "h2h,totals"
-min_profit_percent: 1.5
-max_stake: 200
+arbitrage:
+  min_profit_percent: 1.5
 
-# Bookmakers permitidos (claves exactas de The Odds API)
-allowed_bookmakers:
-  - pinnacle        # Pinnacle
-  - onexbet         # 1xBet
-  - betonlineag     # BetOnline.ag
-  - betfair         # Betfair (Sportsbook) 
+odds_api:
+  key: ""                         # se llena desde .env
+  sports:
+    - soccer_spain_la_liga
+    - soccer_epl
+  markets: "h2h,totals"
+  regions: eu

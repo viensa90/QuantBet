@@ -18,7 +18,7 @@ class ConfigLoader:
         if env_path.exists():
             load_dotenv(dotenv_path=env_path)
         else:
-            load_dotenv()  # busca .env en el directorio actual
+            load_dotenv()
 
         # Cargar configuración YAML
         config_path = Path(__file__).parent.parent / 'config.yaml'

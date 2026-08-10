@@ -2,10 +2,10 @@ arbitrage:
   min_profit_percent: 1.5
 
 pipeline:
-  dedup_window_hours: 1   # No mostrar la misma oportunidad si ya apareció en las últimas N horas
+  dedup_window_hours: 1
 
 odds_api:
-  key: ""                         # se llena desde .env
+  key: ""
   sports:
     - soccer_epl
     - soccer_spain_la_liga
@@ -14,10 +14,10 @@ odds_api:
     - soccer_france_ligue_one
     - soccer_netherlands_eredivisie
     - soccer_portugal_primeira_liga
-    - soccer_brazil_campeonato_brasileiro
+    - soccer_brazil_campeonato              # ← corregido
     - soccer_mexico_ligamx
     - soccer_usa_mls
-    - soccer_england_efl_championship
+    - soccer_england_efl_championship       # se mantiene (puede estar fuera de temporada)
     - soccer_uefa_champs_league
   markets: "h2h,totals"
   regions: eu
@@ -27,5 +27,5 @@ odds_api:
     - BetOnline.ag
     - Betfair
     - Marathonbet
-  exclude_live: true               # Ignorar partidos ya comenzados
-  min_minutes_to_start: 10         # Solo eventos que empiecen en ≥ 10 minutos
+  exclude_live: true
+  min_minutes_to_start: 10

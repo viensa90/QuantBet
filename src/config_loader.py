@@ -13,16 +13,16 @@ class ConfigLoader:
         return cls._instance
 
     def _load(self):
-        # Cargar .env si existe (las variables del sistema tienen prioridad)
+        # Cargar .env si existe
         env_path = Path(__file__).parent.parent / '.env'
         if env_path.exists():
             load_dotenv(dotenv_path=env_path)
         else:
             load_dotenv()
 
-        # Cargar configuración YAML
+        # Cargar configuración YAML con codificación UTF-8 explícita
         config_path = Path(__file__).parent.parent / 'config.yaml'
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             self._config = yaml.safe_load(f)
 
         # Sobrescribir claves sensibles con variables de entorno

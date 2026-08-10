@@ -14,11 +14,15 @@ odds_api:
     - soccer_france_ligue_one
     - soccer_netherlands_eredivisie
     - soccer_portugal_primeira_liga
-    - soccer_brazil_campeonato              # ← corregido
+    - soccer_brazil_campeonato
     - soccer_mexico_ligamx
     - soccer_usa_mls
-    - soccer_england_efl_championship       # se mantiene (puede estar fuera de temporada)
     - soccer_uefa_champs_league
+    - soccer_paraguay_primera_division
+    - soccer_argentina_primera_division
+    - soccer_japan_j1_league
+    - soccer_korea_k_league_1
+    - soccer_belgium_first_a
   markets: "h2h,totals"
   regions: eu
   allowed_bookmakers:

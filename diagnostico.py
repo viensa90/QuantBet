@@ -11,7 +11,7 @@ url = 'https://api.the-odds-api.com/v4/sports/soccer_epl/odds'
 params = {
     'apiKey': key,
     'regions': 'eu',
-    'markets': 'h2h,totals,spreads,both_teams_to_score',
+    'markets': 'h2h,totals,spreads',
     'oddsFormat': 'decimal'
 }
 

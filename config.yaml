@@ -48,7 +48,7 @@ odds_api:
     - soccer_uefa_champs_league_qualification
     - soccer_uefa_nations_league
     - soccer_usa_mls
-  markets: "h2h,totals,spreads,both_teams_to_score"
+  markets: "h2h,totals,spreads"
   regions: eu
   allowed_bookmakers:
     - Pinnacle

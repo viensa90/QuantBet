@@ -1,7 +1,7 @@
 import argparse
 import sys
 import traceback
-from datetime import datetime
+import re
 from pathlib import Path
 from src.config_loader import ConfigLoader
 from src.logger import get_logger
@@ -14,16 +14,39 @@ import logging as _logging
 
 logger = get_logger(__name__)
 
+class ApiKeyMaskingFilter(_logging.Filter):
+    """Filtro que reemplaza la API key por '***' en los mensajes de log."""
+    def __init__(self, api_key):
+        super().__init__()
+        self.api_key = api_key
+
+    def filter(self, record):
+        if self.api_key and hasattr(record, 'msg'):
+            record.msg = str(record.msg).replace(self.api_key, '***')
+        return True
+
 def run_pipeline(source='oddsapi', save=True, simple=False, log_file=None):
     config = ConfigLoader()
     log_level = _logging.WARNING if simple else _logging.INFO
     _logging.getLogger().setLevel(log_level)
 
-    # Redirigir la salida estándar a un StringIO para capturarla
-    import io
-    captured_output = io.StringIO()
-    original_stdout = sys.stdout
-    sys.stdout = captured_output
+    # Añadir FileHandler con nivel INFO fijo (para guardar todos los detalles)
+    file_handler = None
+    if log_file:
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = _logging.FileHandler(log_path, mode='w', encoding='utf-8')
+        file_handler.setLevel(_logging.INFO)  # siempre INFO, sin importar --simple
+        root_logger = _logging.getLogger()
+        # Usar el mismo formateador JSON que la consola
+        if root_logger.handlers:
+            file_handler.setFormatter(root_logger.handlers[0].formatter)
+        # Añadir filtro para enmascarar API key
+        api_key = config.odds_api_key
+        if api_key:
+            mask_filter = ApiKeyMaskingFilter(api_key)
+            file_handler.addFilter(mask_filter)
+        root_logger.addHandler(file_handler)
 
     try:
         engine = ArbitrageEngine()
@@ -75,34 +98,30 @@ def run_pipeline(source='oddsapi', save=True, simple=False, log_file=None):
                     import json
                     summary_lines.append(json.dumps(opp.__dict__, indent=2))
 
+        # Escribir resumen en el archivo de log (además de lo que ya capturó el FileHandler)
+        if file_handler:
+            file_handler.stream.write('\n'.join(summary_lines) + '\n')
+
+        # Imprimir en consola
+        for line in summary_lines:
+            print(line)
+
         if valid_opps:
             try:
                 maybe_notify(valid_opps)
             except Exception as e:
                 logger.error(f"Error enviando notificación: {e}")
 
-        # Escribir resumen al archivo de log (si se pidió)
-        if log_file:
-            log_path = Path(log_file)
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(log_path, 'w', encoding='utf-8') as f:
-                f.write('\n'.join(summary_lines) + '\n')
-
-        # Imprimir en consola (para ejecuciones manuales)
-        for line in summary_lines:
-            print(line)
-
     except Exception as e:
-        # Si algo falla, escribir el error en el log y en consola
         error_msg = f"\n❌ Error en pipeline: {e}\n{traceback.format_exc()}\n"
-        if log_file:
-            log_path = Path(log_file)
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(log_path, 'w', encoding='utf-8') as f:
-                f.write(error_msg)
         print(error_msg)
+        if file_handler:
+            file_handler.stream.write(error_msg)
     finally:
-        sys.stdout = original_stdout
+        if file_handler:
+            root_logger = _logging.getLogger()
+            root_logger.removeHandler(file_handler)
+            file_handler.close()
 
 def main():
     parser = argparse.ArgumentParser(description='QuantBet - Sistema de Arbitraje')
@@ -111,11 +130,11 @@ def main():
     parser.add_argument('--mode', default='all',
                         help='Modo de ejecución (actualmente solo "all")')
     parser.add_argument('--simple', action='store_true',
-                        help='Salida limpia, sin logs técnicos')
+                        help='Salida limpia en consola (logs técnicos solo en archivo)')
     parser.add_argument('--no-save', action='store_false', dest='save',
                         help='No guardar en base de datos')
     parser.add_argument('--log-file', type=str, default=None,
-                        help='Archivo donde guardar el resumen de la ejecución')
+                        help='Archivo donde guardar el registro COMPLETO (con API key enmascarada)')
     args = parser.parse_args()
     run_pipeline(source=args.source, save=args.save, simple=args.simple, log_file=args.log_file)
 

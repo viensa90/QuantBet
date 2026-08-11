@@ -1,0 +1,107 @@
+SQLite WAL mode enabled
+Creando conector de tipo: oddsapi
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_argentina_primera_division/odds (intento 1)
+Eventos después de filtrar en vivo: 127
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_austria_bundesliga/odds (intento 1)
+Eventos después de filtrar en vivo: 41
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_belgium_first_div/odds (intento 1)
+Eventos después de filtrar en vivo: 57
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_brazil_campeonato/odds (intento 1)
+Eventos después de filtrar en vivo: 96
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_brazil_serie_b/odds (intento 1)
+Eventos después de filtrar en vivo: 52
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_chile_campeonato/odds (intento 1)
+Eventos después de filtrar en vivo: 50
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_china_superleague/odds (intento 1)
+Eventos después de filtrar en vivo: 52
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_concacaf_leagues_cup/odds (intento 1)
+Eventos después de filtrar en vivo: 93
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_conmebol_copa_libertadores/odds (intento 1)
+Eventos después de filtrar en vivo: 43
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_conmebol_copa_sudamericana/odds (intento 1)
+Eventos después de filtrar en vivo: 33
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_denmark_superliga/odds (intento 1)
+Eventos después de filtrar en vivo: 47
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_efl_champ/odds (intento 1)
+Eventos después de filtrar en vivo: 66
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_england_league1/odds (intento 1)
+Eventos después de filtrar en vivo: 72
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_england_league2/odds (intento 1)
+Eventos después de filtrar en vivo: 69
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_epl/odds (intento 1)
+Eventos después de filtrar en vivo: 70
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_finland_veikkausliiga/odds (intento 1)
+Eventos después de filtrar en vivo: 35
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_france_ligue_one/odds (intento 1)
+Eventos después de filtrar en vivo: 62
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_france_ligue_two/odds (intento 1)
+Eventos después de filtrar en vivo: 30
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_germany_bundesliga/odds (intento 1)
+Eventos después de filtrar en vivo: 62
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_germany_bundesliga2/odds (intento 1)
+Eventos después de filtrar en vivo: 50
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_germany_dfb_pokal/odds (intento 1)
+Eventos después de filtrar en vivo: 0
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_germany_liga3/odds (intento 1)
+Eventos después de filtrar en vivo: 27
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_greece_super_league/odds (intento 1)
+Eventos después de filtrar en vivo: 22
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_italy_serie_a/odds (intento 1)
+Eventos después de filtrar en vivo: 70
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_italy_serie_b/odds (intento 1)
+Eventos después de filtrar en vivo: 52
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_japan_j_league/odds (intento 1)
+Eventos después de filtrar en vivo: 56
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_korea_kleague1/odds (intento 1)
+Eventos después de filtrar en vivo: 34
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_mexico_ligamx/odds (intento 1)
+Eventos después de filtrar en vivo: 65
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_netherlands_eredivisie/odds (intento 1)
+Eventos después de filtrar en vivo: 55
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_norway_eliteserien/odds (intento 1)
+Eventos después de filtrar en vivo: 45
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_poland_ekstraklasa/odds (intento 1)
+Eventos después de filtrar en vivo: 30
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_portugal_primeira_liga/odds (intento 1)
+Eventos después de filtrar en vivo: 33
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_russia_premier_league/odds (intento 1)
+Eventos después de filtrar en vivo: 40
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_spain_la_liga/odds (intento 1)
+Eventos después de filtrar en vivo: 98
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_spain_segunda_division/odds (intento 1)
+Eventos después de filtrar en vivo: 66
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_sweden_allsvenskan/odds (intento 1)
+Eventos después de filtrar en vivo: 57
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_sweden_superettan/odds (intento 1)
+Eventos después de filtrar en vivo: 52
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_turkey_super_league/odds (intento 1)
+Eventos después de filtrar en vivo: 50
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_uefa_champs_league_qualification/odds (intento 1)
+Eventos después de filtrar en vivo: 0
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_uefa_nations_league/odds (intento 1)
+Eventos después de filtrar en vivo: 34
+Consultando Odds API: https://api.the-odds-api.com/v4/sports/soccer_usa_mls/odds (intento 1)
+Eventos después de filtrar en vivo: 191
+Guardadas 3 oportunidades en BD (descartadas 0 duplicadas)
+
+🎯 3 OPORTUNIDADES DE ARBITRAJE DETECTADAS
+
+⚽ Arsenal vs Coventry City (soccer_epl) – h2h
+   Arsenal: 1xBet @ 1.2 (Stake: 83.78€)
+   Coventry City: Betfair @ 19.0 (Stake: 5.29€)
+   Draw: Betfair @ 9.2 (Stake: 10.93€)
+   Inversión total: 100.00€ → Retorno: 100.54€ (+0.54%)
+
+⚽ Paris Saint Germain vs Rennes (soccer_france_ligue_one) – h2h
+   Paris Saint Germain: 1xBet @ 1.47 (Stake: 68.63€)
+   Rennes: Betfair @ 7.4 (Stake: 13.63€)
+   Draw: 1xBet @ 5.69 (Stake: 17.73€)
+   Inversión total: 99.99€ → Retorno: 100.89€ (+0.89%)
+
+⚽ Frosinone vs Juventus (soccer_italy_serie_a) – h2h
+   Frosinone: Betfair @ 9.0 (Stake: 11.20€)
+   Juventus: 1xBet @ 1.5 (Stake: 67.18€)
+   Draw: 1xBet @ 4.66 (Stake: 21.62€)
+   Inversión total: 100.00€ → Retorno: 100.77€ (+0.77%)
+
+Notificación de Telegram enviada correctamente.

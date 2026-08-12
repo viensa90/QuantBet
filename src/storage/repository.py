@@ -10,6 +10,7 @@ class Repository:
         self.db = database
 
     def _is_duplicate(self, opp, window_hours=1):
+        """Devuelve True si ya existe una oportunidad similar en las últimas 'window_hours' horas."""
         conn = self.db.get_connection()
         row = conn.execute('''
             SELECT id FROM opportunities
@@ -22,6 +23,10 @@ class Repository:
         return row is not None
 
     def save_opportunities(self, opportunities, dedup_window_hours=1):
+        """
+        Guarda oportunidades nuevas, ignorando duplicadas en la ventana indicada.
+        Retorna la lista de las efectivamente guardadas.
+        """
         conn = self.db.get_connection()
         saved = []
         for opp in opportunities:

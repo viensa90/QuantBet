@@ -23,6 +23,7 @@
         .totals { margin-top: 10px; font-size: 0.95em; }
         .totals span { margin-right: 15px; }
         .timestamp { color: #888; font-size: 0.85em; margin-top: 5px; }
+        .live-badge { background:#ff4444; color:white; padding:2px 8px; border-radius:12px; font-size:0.8em; margin-left:5px; }
         .no-opps { text-align: center; color: #888; margin-top: 40px; }
     </style>
 </head>
@@ -33,14 +34,20 @@
 
     <script>
         const sportNames = {
-            'soccer_spain_la_liga': 'La Liga',
             'soccer_epl': 'Premier League',
-            'tennis_atp': 'ATP Tennis',
-            'basketball_nba': 'NBA'
+            'soccer_spain_la_liga': 'La Liga',
+            'soccer_italy_serie_a': 'Serie A',
+            'soccer_germany_bundesliga': 'Bundesliga',
+            'soccer_france_ligue_one': 'Ligue 1',
+            'soccer_argentina_primera_division': 'Primera Argentina',
+            'soccer_usa_mls': 'MLS',
+            'soccer_mexico_ligamx': 'Liga MX',
+            'soccer_brazil_campeonato': 'Brasileirão',
+            // puedes ampliar
         };
 
         function formatDate(isoString) {
-            if (!isoString) return '';
+            if (!isoString) return 'Fecha desconocida';
             const d = new Date(isoString);
             return d.toLocaleString('es-PY', { dateStyle: 'short', timeStyle: 'short' });
         }
@@ -80,6 +87,12 @@
                     const sportReadable = sportNames[opp.sport] || opp.sport;
                     const event = opp.event_name || 'Evento desconocido';
                     const market = opp.market || '-';
+                    const eventTime = details.event_time ? formatDate(details.event_time) : 'Fecha desconocida';
+                    const isLive = details.is_live;
+                    const matchTime = details.match_time;
+                    const liveBadge = isLive
+                        ? `<span class="live-badge">🔴 EN VIVO ${matchTime ?? ''}’</span>`
+                        : '';
 
                     return `
                     <div class="card">
@@ -87,6 +100,7 @@
                             <div>
                                 <div class="event-name">⚽ ${event}</div>
                                 <div class="sport">${sportReadable} · ${market}</div>
+                                <div class="timestamp">🕒 ${eventTime}${liveBadge}</div>
                             </div>
                             <div class="profit">+${opp.profit_percent.toFixed(2)}%</div>
                         </div>
@@ -101,7 +115,6 @@
                             <span>📈 Retorno garantizado: <strong>${details.guaranteed_return.toFixed(2)} €</strong></span>
                             <span>💵 Ganancia neta: <strong>${(details.guaranteed_return - details.total_investment).toFixed(2)} €</strong></span>
                         </div>
-                        <div class="timestamp">🕒 ${formatDate(opp.timestamp)}</div>
                     </div>`;
                 }).join('');
             } catch (err) {

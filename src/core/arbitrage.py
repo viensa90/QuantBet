@@ -2,13 +2,17 @@ from itertools import product
 from typing import List, Any
 
 class ArbitrageOpportunity:
-    def __init__(self, event_name, sport, market, details, profit, profit_percent):
+    def __init__(self, event_name, sport, market, details, profit, profit_percent,
+                 event_time=None, is_live=False, match_time=None):
         self.event_name = event_name
         self.sport = sport
         self.market = market
         self.details = details
         self.profit = profit
         self.profit_percent = profit_percent
+        self.event_time = event_time
+        self.is_live = is_live
+        self.match_time = match_time
 
 class ArbitrageEngine:
     def find_opportunities(self, event: Any) -> List[ArbitrageOpportunity]:
@@ -33,7 +37,6 @@ class ArbitrageEngine:
                 continue
             inv_sum = sum(1/o for o in odds_list)
             if inv_sum < 1.0:
-                # Rentabilidad real sobre la inversión (ROI)
                 profit_percent = (1 / inv_sum - 1) * 100
                 stakes = []
                 for odd in odds_list:
@@ -42,7 +45,10 @@ class ArbitrageEngine:
                 combo_details = {
                     'outcomes': [],
                     'total_investment': round(sum(stakes), 2),
-                    'guaranteed_return': round(total_investment / inv_sum, 2)
+                    'guaranteed_return': round(total_investment / inv_sum, 2),
+                    'event_time': getattr(event, 'timestamp', None),
+                    'is_live': getattr(event, 'is_live', False),
+                    'match_time': getattr(event, 'match_time', None)
                 }
                 for (name, point), (bookmaker, odd), stake in zip(outcome_keys, combo, stakes):
                     label = name
@@ -68,6 +74,9 @@ class ArbitrageEngine:
             market=event.market,
             details=best_combination,
             profit=round(best_combination['guaranteed_return'] - best_combination['total_investment'], 2),
-            profit_percent=round(best_profit, 2)
+            profit_percent=round(best_profit, 2),
+            event_time=getattr(event, 'timestamp', None),
+            is_live=getattr(event, 'is_live', False),
+            match_time=getattr(event, 'match_time', None)
         )
         return [opp]

@@ -56,5 +56,5 @@ odds_api:
     - BetOnline.ag
     - Betfair
     - Marathonbet
-  exclude_live: true
-  min_minutes_to_start: 10
+  exclude_live: false          # 🔴 AHORA INCLUYE PARTIDOS EN VIVO
+  min_minutes_to_start: 0      # sin efecto al estar exclude_live false

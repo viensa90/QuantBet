@@ -26,6 +26,8 @@ class AggregatedEvent:
     market: str
     outcomes: List[Outcome]
     timestamp: Optional[str] = None
+    is_live: bool = False
+    match_time: Optional[str] = None
 
 
 class OddsAPIProvider:
@@ -41,7 +43,7 @@ class OddsAPIProvider:
         self.allowed_bookmakers = [b.lower() for b in config.get("allowed_bookmakers", [])]
         self.timeout = config.get("timeout", 10)
         self.max_retries = config.get("max_retries", 3)
-        self.exclude_live = config.get("exclude_live", True)
+        self.exclude_live = config.get("exclude_live", False)
         self.min_minutes_to_start = config.get("min_minutes_to_start", 0)
 
     def get_events(self) -> List[AggregatedEvent]:
@@ -62,7 +64,6 @@ class OddsAPIProvider:
         return aggregated_events
 
     def _is_future(self, commence_time_str: str, now: datetime) -> bool:
-        """True si el evento empieza al menos dentro de min_minutes_to_start minutos."""
         try:
             event_time = datetime.fromisoformat(commence_time_str.replace("Z", "+00:00"))
             margin = self.min_minutes_to_start * 60
@@ -128,6 +129,17 @@ class OddsAPIProvider:
                             )
                         )
 
+            # Determinar si está en vivo comparando la hora de inicio con ahora
+            commence_time = game.get("commence_time")
+            is_live = False
+            if commence_time:
+                try:
+                    event_time = datetime.fromisoformat(commence_time.replace("Z", "+00:00"))
+                    now = datetime.now(timezone.utc)
+                    is_live = event_time < now
+                except:
+                    pass
+
             aggregated = []
             for (market_key, point), outcomes_list in grouped.items():
                 market_name = market_key
@@ -139,7 +151,9 @@ class OddsAPIProvider:
                         sport=sport,
                         market=market_name,
                         outcomes=outcomes_list,
-                        timestamp=game.get("commence_time")
+                        timestamp=commence_time,
+                        is_live=is_live,
+                        match_time=None
                     )
                 )
             return aggregated

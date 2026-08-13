@@ -2,7 +2,7 @@ arbitrage:
   min_profit_percent: 0.4
 
 pipeline:
-  dedup_window_hours: 1
+  dedup_window_hours: 0
 
 odds_api:
   key: ""

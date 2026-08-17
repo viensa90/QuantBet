@@ -48,7 +48,11 @@ odds_api:
     - soccer_uefa_champs_league_qualification
     - soccer_uefa_nations_league
     - soccer_usa_mls
-  markets: "h2h,totals,spreads"
+    - basketball_nba
+    - basketball_wnba
+    - tennis_atp_cincinnati_open
+    - tennis_wta_cincinnati_open
+  markets: "h2h"
   regions: eu
   allowed_bookmakers:
     - Pinnacle
@@ -56,5 +60,5 @@ odds_api:
     - BetOnline.ag
     - Betfair
     - Marathonbet
-  exclude_live: false          # 🔴 AHORA INCLUYE PARTIDOS EN VIVO
-  min_minutes_to_start: 0      # sin efecto al estar exclude_live false
+  exclude_live: false
+  min_minutes_to_start: 0

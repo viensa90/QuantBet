@@ -45,9 +45,9 @@ Consultando Odds API: https://api.the-odds-api.com/v4/sports/basketball_nba/odds
 Consultando Odds API: https://api.the-odds-api.com/v4/sports/basketball_wnba/odds (intento 1)
 Consultando Odds API: https://api.the-odds-api.com/v4/sports/tennis_atp_cincinnati_open/odds (intento 1)
 Consultando Odds API: https://api.the-odds-api.com/v4/sports/tennis_wta_cincinnati_open/odds (intento 1)
-Guardadas 9 oportunidades en BD (descartadas 0 duplicadas)
+Guardadas 13 oportunidades en BD (descartadas 0 duplicadas)
 
-🎯 9 OPORTUNIDADES DE ARBITRAJE DETECTADAS
+🎯 13 OPORTUNIDADES DE ARBITRAJE DETECTADAS
 
 ⚽ Valencia vs Celta Vigo (soccer_spain_la_liga) – h2h
    🕒 2026-08-22 17:30
@@ -58,38 +58,38 @@ Guardadas 9 oportunidades en BD (descartadas 0 duplicadas)
 
 ⚽ Espanyol vs Real Madrid (soccer_spain_la_liga) – h2h
    🕒 2026-08-22 19:30
-   Espanyol: Betfair @ 8.0 (Stake: 12.77€)
-   Real Madrid: 1xBet @ 1.56 (Stake: 65.49€)
-   Draw: Betfair @ 4.7 (Stake: 21.74€)
-   Inversión total: 100.00€ → Retorno: 102.17€ (+2.17%)
+   Espanyol: Betfair @ 8.6 (Stake: 11.78€)
+   Real Madrid: 1xBet @ 1.5 (Stake: 67.54€)
+   Draw: Betfair @ 4.9 (Stake: 20.68€)
+   Inversión total: 100.00€ → Retorno: 101.31€ (+1.31%)
 
 ⚽ Getafe vs Real Racing Club de Santander (soccer_spain_la_liga) – h2h
    🕒 2026-08-23 17:30
-   Getafe: Betfair @ 2.22 (Stake: 45.42€)
-   Real Racing Club de Santander: 1xBet @ 4.57 (Stake: 22.06€)
-   Draw: 1xBet @ 3.1 (Stake: 32.52€)
-   Inversión total: 100.00€ → Retorno: 100.82€ (+0.82%)
+   Getafe: Betfair @ 2.2 (Stake: 45.64€)
+   Real Racing Club de Santander: 1xBet @ 4.57 (Stake: 21.97€)
+   Draw: 1xBet @ 3.1 (Stake: 32.39€)
+   Inversión total: 100.00€ → Retorno: 100.41€ (+0.41%)
 
 ⚽ Elche CF vs Barcelona (soccer_spain_la_liga) – h2h
    🕒 2026-08-23 19:30
-   Barcelona: 1xBet @ 1.36 (Stake: 73.94€)
-   Elche CF: Betfair @ 10.5 (Stake: 9.58€)
-   Draw: BetOnline.ag @ 6.1 (Stake: 16.48€)
-   Inversión total: 100.00€ → Retorno: 100.56€ (+0.56%)
+   Barcelona: 1xBet @ 1.36 (Stake: 74.14€)
+   Elche CF: Betfair @ 10.5 (Stake: 9.60€)
+   Draw: Betfair @ 6.2 (Stake: 16.26€)
+   Inversión total: 100.00€ → Retorno: 100.82€ (+0.82%)
 
-⚽ Samsunspor vs Goztepe (soccer_turkey_super_league) – h2h
-   🕒 2026-08-17 18:30 🔴 EN VIVO ?'
-   Goztepe: Pinnacle @ 8.64 (Stake: 25.96€)
-   Samsunspor: Betfair @ 13.0 (Stake: 17.25€)
-   Draw: Betfair @ 3.95 (Stake: 56.79€)
-   Inversión total: 100.00€ → Retorno: 224.30€ (+124.30%)
+⚽ Málaga vs Deportivo La Coruña (soccer_spain_la_liga) – h2h
+   🕒 2026-08-24 19:30
+   Deportivo La Coruña: 1xBet @ 3.1 (Stake: 32.50€)
+   Málaga: Betfair @ 2.82 (Stake: 35.72€)
+   Draw: 1xBet @ 3.17 (Stake: 31.78€)
+   Inversión total: 100.00€ → Retorno: 100.74€ (+0.74%)
 
-⚽ Orlando City SC vs Chicago Fire (soccer_usa_mls) – h2h
-   🕒 2026-08-19 23:30
-   Chicago Fire: Betfair @ 2.28 (Stake: 44.05€)
-   Orlando City SC: Betfair @ 3.0 (Stake: 33.48€)
-   Draw: 1xBet @ 4.47 (Stake: 22.47€)
-   Inversión total: 100.00€ → Retorno: 100.44€ (+0.44%)
+⚽ Seattle Sounders FC vs Austin FC (soccer_usa_mls) – h2h
+   🕒 2026-08-20 01:30
+   Austin FC: Betfair @ 5.1 (Stake: 19.76€)
+   Seattle Sounders FC: Betfair @ 1.71 (Stake: 58.93€)
+   Draw: 1xBet @ 4.73 (Stake: 21.31€)
+   Inversión total: 100.00€ → Retorno: 100.78€ (+0.78%)
 
 ⚽ Real Salt Lake vs FC Dallas (soccer_usa_mls) – h2h
    🕒 2026-08-20 01:30
@@ -98,16 +98,42 @@ Guardadas 9 oportunidades en BD (descartadas 0 duplicadas)
    Draw: 1xBet @ 4.38 (Stake: 23.09€)
    Inversión total: 100.01€ → Retorno: 101.13€ (+1.13%)
 
-⚽ Rinky Hijikata vs Jakub Mensik (tennis_atp_cincinnati_open) – h2h
-   🕒 2026-08-17 20:15
-   Jakub Mensik: 1xBet @ 1.31 (Stake: 77.06€)
-   Rinky Hijikata: Betfair @ 4.4 (Stake: 22.94€)
-   Inversión total: 100.00€ → Retorno: 100.95€ (+0.95%)
+⚽ New York Red Bulls vs Chicago Fire (soccer_usa_mls) – h2h
+   🕒 2026-08-22 23:30
+   Chicago Fire: Betfair @ 2.12 (Stake: 47.60€)
+   New York Red Bulls: BetOnline.ag @ 3.35 (Stake: 30.12€)
+   Draw: 1xBet @ 4.53 (Stake: 22.28€)
+   Inversión total: 100.00€ → Retorno: 100.91€ (+0.91%)
 
-⚽ Sorana Cirstea vs Anna Kalinskaya (tennis_wta_cincinnati_open) – h2h
-   🕒 2026-08-17 17:46 🔴 EN VIVO ?'
-   Anna Kalinskaya: Pinnacle @ 1.54 (Stake: 72.70€)
-   Sorana Cirstea: Betfair @ 4.1 (Stake: 27.30€)
-   Inversión total: 100.00€ → Retorno: 111.95€ (+11.95%)
+⚽ Orlando City SC vs Real Salt Lake (soccer_usa_mls) – h2h
+   🕒 2026-08-22 23:30
+   Orlando City SC: Betfair @ 1.99 (Stake: 50.78€)
+   Real Salt Lake: BetOnline.ag @ 3.69 (Stake: 27.39€)
+   Draw: 1xBet @ 4.63 (Stake: 21.83€)
+   Inversión total: 100.00€ → Retorno: 101.06€ (+1.06%)
+
+⚽ Rinky Hijikata vs Jakub Mensik (tennis_atp_cincinnati_open) – h2h
+   🕒 2026-08-17 23:13 🔴 EN VIVO ?'
+   Jakub Mensik: BetOnline.ag @ 1.27 (Stake: 79.08€)
+   Rinky Hijikata: Betfair @ 4.8 (Stake: 20.92€)
+   Inversión total: 100.00€ → Retorno: 100.43€ (+0.43%)
+
+⚽ Linda Noskova vs Clara Tauson (tennis_wta_cincinnati_open) – h2h
+   🕒 2026-08-17 22:46 🔴 EN VIVO ?'
+   Clara Tauson: Betfair @ 2.0 (Stake: 52.04€)
+   Linda Noskova: Pinnacle @ 2.17 (Stake: 47.96€)
+   Inversión total: 100.00€ → Retorno: 104.08€ (+4.08%)
+
+⚽ Marta Kostyuk vs Sloane Stephens (tennis_wta_cincinnati_open) – h2h
+   🕒 2026-08-18 18:00
+   Marta Kostyuk: 1xBet @ 1.16 (Stake: 86.76€)
+   Sloane Stephens: Betfair @ 7.6 (Stake: 13.24€)
+   Inversión total: 100.00€ → Retorno: 100.64€ (+0.64%)
+
+⚽ Coco Gauff vs Ann Li (tennis_wta_cincinnati_open) – h2h
+   🕒 2026-08-18 19:00
+   Ann Li: Betfair @ 6.8 (Stake: 15.00€)
+   Coco Gauff: 1xBet @ 1.2 (Stake: 85.00€)
+   Inversión total: 100.00€ → Retorno: 102.00€ (+2.00%)
 
 Notificación de Telegram enviada correctamente.
